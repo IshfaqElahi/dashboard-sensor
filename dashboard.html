@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Environmental & Radiation Monitor</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            min-height: 100vh;
+            padding: 20px;
+            color: #fff;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 10px rgba(0, 0, 0, 0.5);
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #aaa;
+            margin-bottom: 30px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .card h2 {
+            font-size: 1.3em;
+            margin-bottom: 20px;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+            padding-bottom: 10px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 1.1em;
+            margin: 10px 0;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .safe {
+            background: #28a745;
+            color: white;
+        }
+
+        .warning {
+            background: #ffc107;
+            color: #000;
+        }
+
+        .danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            margin-bottom: 10px;
+        }
+
+        .metric-label {
+            font-size: 1em;
+            color: #ccc;
+        }
+
+        .metric-value {
+            font-size: 1.8em;
+            font-weight: bold;
+        }
+
+        .chart-container {
+            grid-column: 1 / -1;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 25px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        canvas {
+            max-width: 100%;
+            height: 300px !important;
+        }
+
+        .last-update {
+            text-align: center;
+            color: #888;
+            margin-top: 20px;
+        }
+
+        .alert-banner {
+            background: #dc3545;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 20px;
+            animation: pulse 2s infinite;
+            display: none;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.7;
+            }
+        }
+
+        .loading {
+            text-align: center;
+            font-size: 1.5em;
+            padding: 50px;
+        }
+
+        .error {
+            background: rgba(220, 53, 69, 0.2);
+            border: 1px solid #dc3545;
+            color: #ff6b6b;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🛡️ Environmental & Radiation Monitoring System</h1>
+        <div class="subtitle">Real-time Multi-Sensor Dashboard</div>
+
+        <div id="alertBanner" class="alert-banner"></div>
+        <div id="errorMessage" class="error" style="display: none;"></div>
+
+        <div id="loading" class="loading">⏳ Loading data from sensors...</div>
+
+        <div id="dashboard" style="display: none;">
+            <!-- Environmental Sensors -->
+            <div class="grid">
+                <div class="card">
+                    <h2>🌡️ Temperature</h2>
+                    <div class="metric">
+                        <span class="metric-label">Current</span>
+                        <span class="metric-value" id="temp">--</span>
+                    </div>
+                    <div class="status-badge" id="temp-status">--</div>
+                </div>
+
+                <div class="card">
+                    <h2>💧 Humidity</h2>
+                    <div class="metric">
+                        <span class="metric-label">Current</span>
+                        <span class="metric-value" id="humidity">--</span>
+                    </div>
+                    <div class="status-badge" id="humidity-status">--</div>
+                </div>
+
+                <div class="card">
+                    <h2>💨 Hydrogen Gas (MQ8)</h2>
+                    <div class="metric">
+                        <span class="metric-label">Voltage</span>
+                        <span class="metric-value" id="h2-voltage">--</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Digital Output</span>
+                        <span class="metric-value" id="h2-do">--</span>
+                    </div>
+                    <div class="status-badge" id="h2-status">--</div>
+                </div>
+            </div>
+
+            <!-- Radiation Sensors -->
+            <div class="grid">
+                <div class="card">
+                    <h2>☢️ Radiation Level</h2>
+                    <div class="metric">
+                        <span class="metric-label">Dose Rate</span>
+                        <span class="metric-value" id="dose">--</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">CPM</span>
+                        <span class="metric-value" id="cpm">--</span>
+                    </div>
+                    <div class="status-badge" id="rad-status">--</div>
+                </div>
+
+                <div class="card">
+                    <h2>📊 Radiation Stats</h2>
+                    <div class="metric">
+                        <span class="metric-label">CPS</span>
+                        <span class="metric-value" id="cps">--</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Status</span>
+                        <span class="metric-value" id="rad-text">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts -->
+            <div class="chart-container">
+                <h2>📈 Radiation Dose Trend (Last 100 Readings)</h2>
+                <canvas id="doseChart"></canvas>
+            </div>
+
+            <div class="chart-container">
+                <h2>📈 Temperature & Humidity Trend</h2>
+                <canvas id="envChart"></canvas>
+            </div>
+        </div>
+
+        <div class="last-update">
+            <div>Environmental Sensors: <span id="envUpdate">--</span></div>
+            <div>Radiation Sensor: <span id="radUpdate">--</span></div>
+        </div>
+    </div>
+
+    <script>
+        // ===== CONFIGURATION - REPLACE WITH YOUR URLs =====
+        const GM_TUBE_API = 'https://script.google.com/macros/s/AKfycbzCBRfLEIenGJcOjMiCfhb3aIdF_kop9LOhxdMUeVzn__Sl10te8O-uQcWIacMrw4WpWw/exec';
+        const ENV_SENSOR_API = 'https://script.google.com/macros/s/AKfycbyp0PaEELfInYzXKDQxFC5oCGqDaUvf9LptF224IkEq3BBQpCXFol5jRGmjsADJvY50/exec';
+        const UPDATE_INTERVAL = 5000; // 5 seconds
+
+        // ===== SAFETY THRESHOLDS =====
+        const THRESHOLDS = {
+            temperature: { min: 18, max: 30 },
+            humidity: { min: 30, max: 70 },
+            dose: { safe: 0.30, elevated: 1.0, high: 10.0 }
+        };
+
+        // ===== CHART INSTANCES =====
+        let doseChart, envChart;
+
+        // ===== DATA STORAGE =====
+        let envData = null;
+        let radData = null;
+
+        // ===== FETCH ENVIRONMENTAL DATA =====
+        async function fetchEnvData() {
+            try {
+                const response = await fetch(ENV_SENSOR_API);
+                const data = await response.json();
+                if (data.error) throw new Error(data.error);
+                return data;
+            } catch (error) {
+                console.error('Error fetching environmental data:', error);
+                showError('Failed to load environmental sensor data');
+                return null;
+            }
+        }
+
+        // ===== FETCH RADIATION DATA =====
+        async function fetchRadData() {
+            try {
+                const response = await fetch(GM_TUBE_API);
+                const data = await response.json();
+                if (data.error) throw new Error(data.error);
+                return data;
+            } catch (error) {
+                console.error('Error fetching radiation data:', error);
+                showError('Failed to load radiation sensor data');
+                return null;
+            }
+        }
+
+        // ===== SHOW ERROR MESSAGE =====
+        function showError(message) {
+            const errorEl = document.getElementById('errorMessage');
+            errorEl.textContent = '⚠️ ' + message;
+            errorEl.style.display = 'block';
+            setTimeout(() => {
+                errorEl.style.display = 'none';
+            }, 10000);
+        }
+
+        // ===== UPDATE DASHBOARD =====
+        function updateDashboard() {
+            if (!envData && !radData) return;
+
+            // Hide loading, show dashboard
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('dashboard').style.display = 'block';
+
+            // Update Environmental Data
+            if (envData && envData.latest) {
+                const env = envData.latest;
+
+                document.getElementById('temp').textContent = env.temperature + '°C';
+                updateStatus('temp-status', env.temperature, THRESHOLDS.temperature.min, THRESHOLDS.temperature.max);
+
+                document.getElementById('humidity').textContent = env.humidity + '%';
+                updateStatus('humidity-status', env.humidity, THRESHOLDS.humidity.min, THRESHOLDS.humidity.max);
+
+                document.getElementById('h2-voltage').textContent = env.h2_voltage + 'V';
+                document.getElementById('h2-do').textContent = env.h2_do;
+
+                const h2Status = document.getElementById('h2-status');
+                if (env.h2_do == 1) {
+                    h2Status.textContent = '✅ Clean Air';
+                    h2Status.className = 'status-badge safe';
+                } else {
+                    h2Status.textContent = '🚨 H₂ Detected!';
+                    h2Status.className = 'status-badge danger';
+                    showAlert('Hydrogen gas detected!');
+                }
+
+                document.getElementById('envUpdate').textContent = new Date(env.timestamp).toLocaleString();
+
+                // Update environmental chart
+                updateEnvChart(envData.history);
+            }
+
+            // Update Radiation Data
+            if (radData && radData.latest) {
+                const rad = radData.latest;
+
+                document.getElementById('dose').textContent = rad.dose + ' µSv/h';
+                document.getElementById('cpm').textContent = rad.cpm;
+                document.getElementById('cps').textContent = rad.cps;
+                document.getElementById('rad-text').textContent = rad.status;
+
+                const radStatus = document.getElementById('rad-status');
+                if (rad.dose < THRESHOLDS.dose.safe) {
+                    radStatus.textContent = '✅ Normal';
+                    radStatus.className = 'status-badge safe';
+                } else if (rad.dose < THRESHOLDS.dose.elevated) {
+                    radStatus.textContent = '⚠️ Elevated';
+                    radStatus.className = 'status-badge warning';
+                } else if (rad.dose < THRESHOLDS.dose.high) {
+                    radStatus.textContent = '⚠️ High';
+                    radStatus.className = 'status-badge warning';
+                    showAlert('High radiation detected!');
+                } else {
+                    radStatus.textContent = '🚨 DANGER';
+                    radStatus.className = 'status-badge danger';
+                    showAlert('DANGEROUS radiation levels!');
+                }
+
+                document.getElementById('radUpdate').textContent = new Date(rad.timestamp).toLocaleString();
+
+                // Update radiation chart
+                updateDoseChart(radData.history);
+            }
+        }
+
+        // ===== UPDATE STATUS BADGE =====
+        function updateStatus(elementId, value, min, max) {
+            const element = document.getElementById(elementId);
+            if (value < min || value > max) {
+                element.textContent = '⚠️ Out of Range';
+                element.className = 'status-badge warning';
+            } else {
+                element.textContent = '✅ Normal';
+                element.className = 'status-badge safe';
+            }
+        }
+
+        // ===== SHOW ALERT BANNER =====
+        function showAlert(message) {
+            const banner = document.getElementById('alertBanner');
+            banner.textContent = '⚠️ ' + message;
+            banner.style.display = 'block';
+            setTimeout(() => {
+                banner.style.display = 'none';
+            }, 10000);
+        }
+
+        // ===== UPDATE DOSE CHART =====
+        function updateDoseChart(history) {
+            if (!history || history.length === 0) return;
+
+            const timestamps = history.map(row => new Date(row.timestamp).toLocaleTimeString());
+            const doses = history.map(row => row.dose);
+
+            if (doseChart) doseChart.destroy();
+            const doseCtx = document.getElementById('doseChart').getContext('2d');
+            doseChart = new Chart(doseCtx, {
+                type: 'line',
+                data: {
+                    labels: timestamps,
+                    datasets: [{
+                        label: 'Dose Rate (µSv/h)',
+                        data: doses,
+                        borderColor: '#ff6384',
+                        backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { labels: { color: '#fff' } }
+                    },
+                    scales: {
+                        x: { ticks: { color: '#aaa' }, grid: { color: 'rgba(255,255,255,0.1)' } },
+                        y: { ticks: { color: '#aaa' }, grid: { color: 'rgba(255,255,255,0.1)' } }
+                    }
+                }
+            });
+        }
+
+        // ===== UPDATE ENVIRONMENTAL CHART =====
+        function updateEnvChart(history) {
+            if (!history || history.length === 0) return;
+
+            const timestamps = history.map(row => new Date(row.timestamp).toLocaleTimeString());
+            const temps = history.map(row => row.temperature);
+            const humidities = history.map(row => row.humidity);
+
+            if (envChart) envChart.destroy();
+            const envCtx = document.getElementById('envChart').getContext('2d');
+            envChart = new Chart(envCtx, {
+                type: 'line',
+                data: {
+                    labels: timestamps,
+                    datasets: [
+                        {
+                            label: 'Temperature (°C)',
+                            data: temps,
+                            borderColor: '#36a2eb',
+                            backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                            tension: 0.4,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Humidity (%)',
+                            data: humidities,
+                            borderColor: '#4bc0c0',
+                            backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                            tension: 0.4,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { labels: { color: '#fff' } }
+                    },
+                    scales: {
+                        x: { ticks: { color: '#aaa' }, grid: { color: 'rgba(255,255,255,0.1)' } },
+                        y: {
+                            type: 'linear',
+                            position: 'left',
+                            ticks: { color: '#aaa' },
+                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        },
+                        y1: {
+                            type: 'linear',
+                            position: 'right',
+                            ticks: { color: '#aaa' },
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        }
+
+        // ===== FETCH ALL DATA =====
+        async function fetchAllData() {
+            const [env, rad] = await Promise.all([
+                fetchEnvData(),
+                fetchRadData()
+            ]);
+
+            if (env) envData = env;
+            if (rad) radData = rad;
+
+            updateDashboard();
+        }
+
+        // ===== INITIALIZE =====
+        async function init() {
+            await fetchAllData();
+        }
+
+        // ===== AUTO-REFRESH =====
+        setInterval(fetchAllData, UPDATE_INTERVAL);
+
+        // Start on page load
+        init();
+    </script>
+</body>
+
+</html>
