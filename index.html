@@ -115,6 +115,59 @@
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
+        .map-container {
+            grid-column: 1 / -1;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 25px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            min-height: 750px;
+        }
+
+        .map-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 15px;
+        }
+
+        .map-description {
+            color: #aaa;
+            margin-bottom: 15px;
+            font-size: 0.95em;
+            line-height: 1.6;
+        }
+
+        .map-iframe {
+            width: 100%;
+            height: 650px;
+            border: none;
+            border-radius: 10px;
+            background: white;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .single-map-iframe {
+            width: 100%;
+            height: 700px;
+            border: none;
+            border-radius: 10px;
+            background: white;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .map-card {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: 15px;
+        }
+
+        .map-card h3 {
+            margin: 0 0 15px 0;
+            font-size: 1.2em;
+            color: #667eea;
+        }
+
         canvas {
             max-width: 100%;
             height: 300px !important;
@@ -140,13 +193,8 @@
         }
 
         @keyframes pulse {
-            0%,
-            100% {
-                opacity: 1;
-            }
-            50% {
-                opacity: 0.7;
-            }
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
         }
 
         .loading {
@@ -163,21 +211,103 @@
             border-radius: 10px;
             margin-bottom: 20px;
         }
+
+        .section-divider {
+            grid-column: 1 / -1;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            margin: 20px 0;
+        }
+
+        .section-title {
+            grid-column: 1 / -1;
+            text-align: center;
+            font-size: 2em;
+            margin: 30px 0 20px 0;
+            color: #fff;
+            text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.5);
+        }
+
+        .map-info-box {
+            background: rgba(255, 255, 255, 0.1);
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
+
+        .map-info-box h3 {
+            margin: 0 0 10px 0;
+            font-size: 1.1em;
+            color: #667eea;
+        }
+
+        .map-info-box p {
+            margin: 5px 0;
+            font-size: 0.9em;
+            color: #ccc;
+        }
+
+        .tab-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .tab-button {
+            padding: 12px 24px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 1em;
+            font-weight: 500;
+        }
+
+        .tab-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: #667eea;
+        }
+
+        .tab-button.active {
+            background: #667eea;
+            border-color: #667eea;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @media (max-width: 768px) {
+            h1 { font-size: 1.8em; }
+            .map-grid { grid-template-columns: 1fr; }
+            .map-iframe { height: 500px; }
+            .single-map-iframe { height: 550px; }
+        }
     </style>
 </head>
 
 <body>
     <div class="container">
         <h1>🛡️ Environmental & Radiation Monitoring System</h1>
-        <div class="subtitle">Real-time Multi-Sensor Dashboard</div>
+        <div class="subtitle">Real-time Multi-Sensor Dashboard with Spatial Analysis</div>
 
         <div id="alertBanner" class="alert-banner"></div>
         <div id="errorMessage" class="error" style="display: none;"></div>
-
         <div id="loading" class="loading">⏳ Loading data from sensors...</div>
 
         <div id="dashboard" style="display: none;">
-            <!-- Environmental Sensors -->
+            
+            <div class="section-title">📊 Real-Time Sensor Readings</div>
+
             <div class="grid">
                 <div class="card">
                     <h2>🌡️ Temperature</h2>
@@ -215,7 +345,6 @@
                 </div>
             </div>
 
-            <!-- Radiation Sensors -->
             <div class="grid">
                 <div class="card">
                     <h2>☢️ Radiation Level</h2>
@@ -243,16 +372,101 @@
                 </div>
             </div>
 
-            <!-- Charts -->
-            <div class="chart-container">
-                <h2>📈 Radiation Dose Trend (Last 100 Readings)</h2>
-                <canvas id="doseChart"></canvas>
+            <div class="section-divider"></div>
+            <div class="section-title">📈 Historical Trends</div>
+
+            <div class="grid">
+                <div class="chart-container">
+                    <h2>📈 Radiation Dose Trend (Last 100 Readings)</h2>
+                    <canvas id="doseChart"></canvas>
+                </div>
+
+                <div class="chart-container">
+                    <h2>📈 Temperature & Humidity Trend</h2>
+                    <canvas id="envChart"></canvas>
+                </div>
             </div>
 
-            <div class="chart-container">
-                <h2>📈 Temperature & Humidity Trend</h2>
-                <canvas id="envChart"></canvas>
+            <div class="section-divider"></div>
+            <div class="section-title">🗺️ Radiation Dispersion - Spatial Analysis</div>
+
+            <div class="grid">
+                <div class="map-container">
+                    <h2>🗺️ Interactive Radiation Maps</h2>
+                    
+                    <div class="tab-buttons">
+                        <button class="tab-button active" onclick="switchMapTab('both')">
+                            📊 Both Maps (Side-by-Side)
+                        </button>
+                        <button class="tab-button" onclick="switchMapTab('interpolated')">
+                            🌐 Interpolated Dispersion Map
+                        </button>
+                        <button class="tab-button" onclick="switchMapTab('measurement')">
+                            📍 Measurement Points Map
+                        </button>
+                    </div>
+
+                    <div id="tab-both" class="tab-content active">
+                        <div class="map-info-box">
+                            <h3>📍 Viewing Both Maps</h3>
+                            <p><strong>Left:</strong> Interpolated radiation field (400+ data points)</p>
+                            <p><strong>Right:</strong> Specific measurement points with GPS coordinates</p>
+                        </div>
+
+                        <div class="map-grid">
+                            <div class="map-card">
+                                <h3>🌐 Interpolated Dispersion</h3>
+                                <iframe class="map-iframe" src="radiation_dispersion_map.html" title="Interpolated Radiation Map" loading="lazy"></iframe>
+                            </div>
+
+                            <div class="map-card">
+                                <h3>📍 Measurement Points</h3>
+                                <iframe class="map-iframe" src="radiation_map_light.html" title="Measurement Points Map" loading="lazy"></iframe>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="tab-interpolated" class="tab-content">
+                        <div class="map-info-box">
+                            <h3>🌐 Interpolated Radiation Dispersion Map</h3>
+                            <p>Linear interpolation from 400+ data points showing radiation distribution patterns.</p>
+                            <p><strong>Features:</strong> Heatmap • Risk contours • Statistical analysis</p>
+                        </div>
+
+                        <div class="map-description">
+                            <strong>🔍 How to Use:</strong><br>
+                            • <strong>Zoom/Pan:</strong> Mouse wheel + drag<br>
+                            • <strong>Layers:</strong> Toggle views in top-right control<br>
+                            • <strong>Contours:</strong> Enable "Contour Lines" to see risk zones<br>
+                            • <strong>Statistics:</strong> View stats panel on top-right
+                        </div>
+
+                        <iframe class="single-map-iframe" src="radiation_dispersion_map.html" title="Interpolated Map" loading="lazy"></iframe>
+                    </div>
+
+                    <div id="tab-measurement" class="tab-content">
+                        <div class="map-info-box">
+                            <h3>📍 Radiation Measurement Points</h3>
+                            <p>GPS-tagged measurement locations with detailed risk assessments.</p>
+                            <p><strong>Features:</strong> Precise coordinates • Risk zones • Safety calculations</p>
+                        </div>
+
+                        <div class="map-description">
+                            <strong>🔍 How to Use:</strong><br>
+                            • <strong>Click Markers:</strong> View detailed radiation data<br>
+                            • <strong>Risk Zones:</strong> Toggle layer to see affected areas<br>
+                            • <strong>Map Styles:</strong> Switch between Light, Satellite, Street views
+                        </div>
+
+                        <iframe class="single-map-iframe" src="radiation_map_light.html" title="Measurement Map" loading="lazy"></iframe>
+                    </div>
+
+                    <div class="map-description" style="margin-top: 15px; font-size: 0.85em; color: #888;">
+                        <strong>⚠️ Note:</strong> Ensure both map HTML files are in the same directory as this dashboard.
+                    </div>
+                </div>
             </div>
+
         </div>
 
         <div class="last-update">
@@ -260,28 +474,31 @@
             <div>Radiation Sensor: <span id="radUpdate">--</span></div>
         </div>
     </div>
-
     <script>
-        // ===== CONFIGURATION - REPLACE WITH YOUR URLs =====
+        // ===== CONFIGURATION =====
         const GM_TUBE_API = 'https://script.google.com/macros/s/AKfycbzCBRfLEIenGJcOjMiCfhb3aIdF_kop9LOhxdMUeVzn__Sl10te8O-uQcWIacMrw4WpWw/exec';
         const ENV_SENSOR_API = 'https://script.google.com/macros/s/AKfycbyp0PaEELfInYzXKDQxFC5oCGqDaUvf9LptF224IkEq3BBQpCXFol5jRGmjsADJvY50/exec';
-        const UPDATE_INTERVAL = 5000; // 5 seconds
+        const UPDATE_INTERVAL = 5000;
 
-        // ===== SAFETY THRESHOLDS =====
         const THRESHOLDS = {
             temperature: { min: 18, max: 30 },
             humidity: { min: 30, max: 70 },
             dose: { safe: 0.30, elevated: 1.0, high: 10.0 }
         };
 
-        // ===== CHART INSTANCES =====
         let doseChart, envChart;
-
-        // ===== DATA STORAGE =====
         let envData = null;
         let radData = null;
 
-        // ===== FETCH ENVIRONMENTAL DATA =====
+        // ===== MAP TAB SWITCHING =====
+        function switchMapTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.getElementById('tab-' + tabName).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        // ===== DATA FETCHING =====
         async function fetchEnvData() {
             try {
                 const response = await fetch(ENV_SENSOR_API);
@@ -295,7 +512,6 @@
             }
         }
 
-        // ===== FETCH RADIATION DATA =====
         async function fetchRadData() {
             try {
                 const response = await fetch(GM_TUBE_API);
@@ -309,34 +525,26 @@
             }
         }
 
-        // ===== SHOW ERROR MESSAGE =====
         function showError(message) {
             const errorEl = document.getElementById('errorMessage');
             errorEl.textContent = '⚠️ ' + message;
             errorEl.style.display = 'block';
-            setTimeout(() => {
-                errorEl.style.display = 'none';
-            }, 10000);
+            setTimeout(() => errorEl.style.display = 'none', 10000);
         }
 
         // ===== UPDATE DASHBOARD =====
         function updateDashboard() {
             if (!envData && !radData) return;
 
-            // Hide loading, show dashboard
             document.getElementById('loading').style.display = 'none';
             document.getElementById('dashboard').style.display = 'block';
 
-            // Update Environmental Data
             if (envData && envData.latest) {
                 const env = envData.latest;
-
                 document.getElementById('temp').textContent = env.temperature + '°C';
                 updateStatus('temp-status', env.temperature, THRESHOLDS.temperature.min, THRESHOLDS.temperature.max);
-
                 document.getElementById('humidity').textContent = env.humidity + '%';
                 updateStatus('humidity-status', env.humidity, THRESHOLDS.humidity.min, THRESHOLDS.humidity.max);
-
                 document.getElementById('h2-raw').textContent = env.h2_raw;
                 document.getElementById('h2-voltage').textContent = env.h2_voltage + 'V';
                 document.getElementById('h2-do').textContent = env.h2_do;
@@ -352,15 +560,11 @@
                 }
 
                 document.getElementById('envUpdate').textContent = new Date(env.timestamp).toLocaleString();
-
-                // Update environmental chart
                 updateEnvChart(envData.history);
             }
 
-            // Update Radiation Data
             if (radData && radData.latest) {
                 const rad = radData.latest;
-
                 document.getElementById('dose').textContent = rad.dose + ' µSv/h';
                 document.getElementById('cpm').textContent = rad.cpm;
                 document.getElementById('cps').textContent = rad.cps;
@@ -384,13 +588,10 @@
                 }
 
                 document.getElementById('radUpdate').textContent = new Date(rad.timestamp).toLocaleString();
-
-                // Update radiation chart
                 updateDoseChart(radData.history);
             }
         }
 
-        // ===== UPDATE STATUS BADGE =====
         function updateStatus(elementId, value, min, max) {
             const element = document.getElementById(elementId);
             if (value < min || value > max) {
@@ -402,20 +603,16 @@
             }
         }
 
-        // ===== SHOW ALERT BANNER =====
         function showAlert(message) {
             const banner = document.getElementById('alertBanner');
             banner.textContent = '⚠️ ' + message;
             banner.style.display = 'block';
-            setTimeout(() => {
-                banner.style.display = 'none';
-            }, 10000);
+            setTimeout(() => banner.style.display = 'none', 10000);
         }
 
-        // ===== UPDATE DOSE CHART =====
+        // ===== CHARTS =====
         function updateDoseChart(history) {
             if (!history || history.length === 0) return;
-
             const timestamps = history.map(row => new Date(row.timestamp).toLocaleTimeString());
             const doses = history.map(row => row.dose);
 
@@ -437,9 +634,7 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: {
-                        legend: { labels: { color: '#fff' } }
-                    },
+                    plugins: { legend: { labels: { color: '#fff' } } },
                     scales: {
                         x: { ticks: { color: '#aaa' }, grid: { color: 'rgba(255,255,255,0.1)' } },
                         y: { ticks: { color: '#aaa' }, grid: { color: 'rgba(255,255,255,0.1)' } }
@@ -448,10 +643,8 @@
             });
         }
 
-        // ===== UPDATE ENVIRONMENTAL CHART =====
         function updateEnvChart(history) {
             if (!history || history.length === 0) return;
-
             const timestamps = history.map(row => new Date(row.timestamp).toLocaleTimeString());
             const temps = history.map(row => row.temperature);
             const humidities = history.map(row => row.humidity);
@@ -484,9 +677,7 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: {
-                        legend: { labels: { color: '#fff' } }
-                    },
+                    plugins: { legend: { labels: { color: '#fff' } } },
                     scales: {
                         x: { ticks: { color: '#aaa' }, grid: { color: 'rgba(255,255,255,0.1)' } },
                         y: {
@@ -506,30 +697,19 @@
             });
         }
 
-        // ===== FETCH ALL DATA =====
         async function fetchAllData() {
-            const [env, rad] = await Promise.all([
-                fetchEnvData(),
-                fetchRadData()
-            ]);
-
+            const [env, rad] = await Promise.all([fetchEnvData(), fetchRadData()]);
             if (env) envData = env;
             if (rad) radData = rad;
-
             updateDashboard();
         }
 
-        // ===== INITIALIZE =====
         async function init() {
             await fetchAllData();
         }
 
-        // ===== AUTO-REFRESH =====
         setInterval(fetchAllData, UPDATE_INTERVAL);
-
-        // Start on page load
         init();
     </script>
 </body>
-
 </html>
