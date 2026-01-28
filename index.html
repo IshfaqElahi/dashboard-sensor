@@ -193,8 +193,15 @@
         }
 
         @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.7;
+            }
         }
 
         .loading {
@@ -287,10 +294,21 @@
         }
 
         @media (max-width: 768px) {
-            h1 { font-size: 1.8em; }
-            .map-grid { grid-template-columns: 1fr; }
-            .map-iframe { height: 500px; }
-            .single-map-iframe { height: 550px; }
+            h1 {
+                font-size: 1.8em;
+            }
+
+            .map-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .map-iframe {
+                height: 500px;
+            }
+
+            .single-map-iframe {
+                height: 550px;
+            }
         }
     </style>
 </head>
@@ -305,7 +323,7 @@
         <div id="loading" class="loading">⏳ Loading data from sensors...</div>
 
         <div id="dashboard" style="display: none;">
-            
+
             <div class="section-title">📊 Real-Time Sensor Readings</div>
 
             <div class="grid">
@@ -393,7 +411,7 @@
             <div class="grid">
                 <div class="map-container">
                     <h2>🗺️ Interactive Radiation Maps</h2>
-                    
+
                     <div class="tab-buttons">
                         <button class="tab-button active" onclick="switchMapTab('both')">
                             📊 Both Maps (Side-by-Side)
@@ -416,12 +434,14 @@
                         <div class="map-grid">
                             <div class="map-card">
                                 <h3>🌐 Interpolated Dispersion</h3>
-                                <iframe class="map-iframe" src="radiation_dispersion_map.html" title="Interpolated Radiation Map" loading="lazy"></iframe>
+                                <iframe class="map-iframe" src="radiation_dispersion_map.html"
+                                    title="Interpolated Radiation Map" loading="lazy"></iframe>
                             </div>
 
                             <div class="map-card">
                                 <h3>📍 Measurement Points</h3>
-                                <iframe class="map-iframe" src="radiation_map_light.html" title="Measurement Points Map" loading="lazy"></iframe>
+                                <iframe class="map-iframe" src="radiation_map_light.html" title="Measurement Points Map"
+                                    loading="lazy"></iframe>
                             </div>
                         </div>
                     </div>
@@ -441,7 +461,8 @@
                             • <strong>Statistics:</strong> View stats panel on top-right
                         </div>
 
-                        <iframe class="single-map-iframe" src="radiation_dispersion_map.html" title="Interpolated Map" loading="lazy"></iframe>
+                        <iframe class="single-map-iframe" src="radiation_dispersion_map.html" title="Interpolated Map"
+                            loading="lazy"></iframe>
                     </div>
 
                     <div id="tab-measurement" class="tab-content">
@@ -458,11 +479,13 @@
                             • <strong>Map Styles:</strong> Switch between Light, Satellite, Street views
                         </div>
 
-                        <iframe class="single-map-iframe" src="radiation_map_light.html" title="Measurement Map" loading="lazy"></iframe>
+                        <iframe class="single-map-iframe" src="radiation_map_light.html" title="Measurement Map"
+                            loading="lazy"></iframe>
                     </div>
 
                     <div class="map-description" style="margin-top: 15px; font-size: 0.85em; color: #888;">
-                        <strong>⚠️ Note:</strong> Ensure both map HTML files are in the same directory as this dashboard.
+                        <strong>⚠️ Note:</strong> Ensure both map HTML files are in the same directory as this
+                        dashboard.
                     </div>
                 </div>
             </div>
@@ -712,4 +735,5 @@
         init();
     </script>
 </body>
+
 </html>
