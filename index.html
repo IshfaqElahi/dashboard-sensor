@@ -21,6 +21,116 @@
             color: #fff;
         }
 
+        /* Navigation Bar Styles */
+        .navbar {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 15px;
+            padding: 15px 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .nav-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .nav-brand {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #fff;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .nav-menu {
+            display: flex;
+            gap: 25px;
+            list-style: none;
+        }
+
+        .nav-item {
+            position: relative;
+        }
+
+        .nav-link {
+            color: #fff;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 25px;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 500;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .nav-link.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .nav-toggle {
+            display: none;
+            flex-direction: column;
+            cursor: pointer;
+            gap: 4px;
+        }
+
+        .nav-toggle span {
+            width: 25px;
+            height: 3px;
+            background: #fff;
+            border-radius: 2px;
+            transition: 0.3s;
+        }
+
+        @media (max-width: 768px) {
+            .nav-menu {
+                position: fixed;
+                top: 80px;
+                left: -100%;
+                width: 100%;
+                height: calc(100vh - 80px);
+                background: rgba(15, 12, 41, 0.95);
+                backdrop-filter: blur(15px);
+                flex-direction: column;
+                justify-content: flex-start;
+                align-items: center;
+                padding-top: 50px;
+                transition: left 0.3s ease;
+                z-index: 1000;
+            }
+
+            .nav-menu.active {
+                left: 0;
+            }
+
+            .nav-toggle {
+                display: flex;
+            }
+
+            .nav-link {
+                padding: 15px 30px;
+                font-size: 1.1em;
+            }
+        }
+
         .container {
             max-width: 1400px;
             margin: 0 auto;
@@ -314,6 +424,42 @@
 </head>
 
 <body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="#" class="nav-brand">
+                🛰️ ISOTOPER B15
+            </a>
+            <ul class="nav-menu">
+                <li class="nav-item">
+                    <a href="#" class="nav-link active">
+                        📊 Dashboard
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="gpm.html" class="nav-link">
+                        🌪️ Gaussian Plume Model
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#sensors" class="nav-link">
+                        📡 Sensors
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#maps" class="nav-link">
+                        🗺️ Maps
+                    </a>
+                </li>
+            </ul>
+            <div class="nav-toggle" onclick="toggleMenu()">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+    </nav>
+
     <div class="container">
         <h1>Environmental & Radiation Monitoring System</h1>
         <div class="subtitle">
@@ -326,7 +472,7 @@
 
         <div id="dashboard" style="display: none;">
 
-            <div class="section-title">📊 <h1>ISOTOPER B15</h1> Real-Time Sensor Readings</div>
+            <div id="sensors" class="section-title">📊 <h1>ISOTOPER B15</h1> Real-Time Sensor Readings</div>
 
             <div class="grid">
                 <div class="card">
@@ -408,7 +554,30 @@
             </div>
 
             <div class="section-divider"></div>
-            <div class="section-title">🗺️ Radiation Dispersion - Spatial Analysis</div>
+            
+            <!-- Gaussian Plume Model Card -->
+            <div class="grid">
+                <div class="card" style="grid-column: 1 / -1; text-align: center; background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%); border: 2px solid rgba(102, 126, 234, 0.3);">
+                    <h2>🌪️ Gaussian Plume Dispersion Model</h2>
+                    <p style="color: #ccc; margin-bottom: 20px; line-height: 1.6;">
+                        Advanced atmospheric dispersion modeling with real-time weather integration.<br>
+                        Visualize pollution plumes, concentration fields, and environmental impact analysis.
+                    </p>
+                    <div style="display: flex; gap: 15px; justify-content: center; align-items: center; flex-wrap: wrap;">
+                        <div style="color: #aaa; font-size: 0.9em;">
+                            ✅ Real-time Weather Data &nbsp;&nbsp;
+                            ✅ 3D Concentration Fields &nbsp;&nbsp;
+                            ✅ Interactive Mapping
+                        </div>
+                    </div>
+                    <a href="gpm.html" style="display: inline-block; margin-top: 15px; padding: 12px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; border-radius: 25px; font-weight: bold; transition: all 0.3s ease; box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 25px rgba(102, 126, 234, 0.6)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 5px 15px rgba(102, 126, 234, 0.4)'">
+                        🚀 Launch Plume Model
+                    </a>
+                </div>
+            </div>
+
+            <div class="section-divider"></div>
+            <div id="maps" class="section-title">🗺️ Radiation Dispersion - Spatial Analysis</div>
 
             <div class="grid">
                 <div class="map-container">
@@ -732,6 +901,30 @@
         async function init() {
             await fetchAllData();
         }
+
+        // ===== NAVIGATION =====
+        function toggleMenu() {
+            const navMenu = document.querySelector('.nav-menu');
+            const navToggle = document.querySelector('.nav-toggle');
+            navMenu.classList.toggle('active');
+            navToggle.classList.toggle('active');
+        }
+
+        // Smooth scrolling for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                if (this.getAttribute('href') !== '#') {
+                    e.preventDefault();
+                    const targetId = this.getAttribute('href');
+                    const targetSection = document.querySelector(targetId);
+                    if (targetSection) {
+                        targetSection.scrollIntoView({
+                            behavior: 'smooth'
+                        });
+                    }
+                }
+            });
+        });
 
         setInterval(fetchAllData, UPDATE_INTERVAL);
         init();
