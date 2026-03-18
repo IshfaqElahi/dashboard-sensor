@@ -7,6 +7,34 @@
     <title>Environmental & Radiation Monitor</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
+        :root {
+            /* Light theme variables */
+            --bg-primary: linear-gradient(135deg, #f1f5f9, #e2e8f0, #cbd5e0);
+            --bg-card: rgba(255, 255, 255, 0.8);
+            --text-primary: #1a202c;
+            --text-secondary: #4a5568;
+            --text-muted: #718096;
+            --border-color: rgba(0, 0, 0, 0.1);
+            --shadow-color: rgba(0, 0, 0, 0.1);
+            --nav-bg: rgba(255, 255, 255, 0.9);
+            --nav-border: rgba(0, 0, 0, 0.1);
+            --section-title-color: #1e293b;
+        }
+
+        [data-theme="dark"] {
+            /* Dark theme variables */
+            --bg-primary: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            --bg-card: rgba(255, 255, 255, 0.05);
+            --text-primary: #fff;
+            --text-secondary: #e2e8f0;
+            --text-muted: #a0aec0;
+            --border-color: rgba(255, 255, 255, 0.1);
+            --shadow-color: rgba(0, 0, 0, 0.3);
+            --nav-bg: rgba(255, 255, 255, 0.1);
+            --nav-border: rgba(255, 255, 255, 0.2);
+            --section-title-color: #fff;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -15,21 +43,23 @@
 
         body {
             font-family: 'Poppins', 'Segoe UI', Tahoma, sans-serif;
-            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            background: var(--bg-primary);
             min-height: 100vh;
             padding: 20px;
-            color: #fff;
+            color: var(--text-primary);
+            transition: all 0.3s ease;
         }
 
         /* Navigation Bar Styles */
         .navbar {
-            background: rgba(255, 255, 255, 0.1);
+            background: var(--nav-bg);
             backdrop-filter: blur(15px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            border: 1px solid var(--nav-border);
             border-radius: 15px;
             padding: 15px 25px;
             margin-bottom: 30px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 8px 32px var(--shadow-color);
+            transition: all 0.3s ease;
         }
 
         .nav-container {
@@ -43,7 +73,7 @@
         .nav-brand {
             font-size: 1.5em;
             font-weight: bold;
-            color: #fff;
+            color: var(--text-primary);
             text-decoration: none;
             display: flex;
             align-items: center;
@@ -54,6 +84,7 @@
             display: flex;
             gap: 25px;
             list-style: none;
+            align-items: center;
         }
 
         .nav-item {
@@ -61,7 +92,7 @@
         }
 
         .nav-link {
-            color: #fff;
+            color: var(--text-primary);
             text-decoration: none;
             padding: 10px 20px;
             border-radius: 25px;
@@ -70,19 +101,43 @@
             align-items: center;
             gap: 8px;
             font-weight: 500;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
         }
 
         .nav-link:hover {
-            background: rgba(255, 255, 255, 0.2);
+            background: rgba(102, 126, 234, 0.1);
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 5px 15px var(--shadow-color);
         }
 
         .nav-link.active {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
             box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        /* Theme Toggle Button */
+        .theme-toggle {
+            background: var(--bg-card);
+            border: 2px solid var(--border-color);
+            border-radius: 25px;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 1.1em;
+            color: var(--text-primary);
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 500;
+            margin-left: 15px;
+        }
+
+        .theme-toggle:hover {
+            background: rgba(102, 126, 234, 0.1);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px var(--shadow-color);
         }
 
         .nav-toggle {
@@ -95,7 +150,7 @@
         .nav-toggle span {
             width: 25px;
             height: 3px;
-            background: #fff;
+            background: var(--text-primary);
             border-radius: 2px;
             transition: 0.3s;
         }
@@ -140,12 +195,13 @@
             text-align: center;
             font-size: 2.5em;
             margin-bottom: 10px;
-            text-shadow: 2px 2px 10px rgba(0, 0, 0, 0.5);
+            text-shadow: 2px 2px 10px var(--shadow-color);
+            color: var(--text-primary);
         }
 
         .subtitle {
             text-align: center;
-            color: #aaa;
+            color: var(--text-muted);
             margin-bottom: 30px;
         }
 
@@ -157,19 +213,27 @@
         }
 
         .card {
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(10px);
+            background: var(--bg-card);
+            backdrop-filter: blur(15px);
             border-radius: 15px;
             padding: 25px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 8px 32px var(--shadow-color);
+        }
+
+        /* Enhanced card styling for light theme */
+        [data-theme="light"] .card {
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
         }
 
         .card h2 {
             font-size: 1.3em;
             margin-bottom: 20px;
-            border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+            border-bottom: 2px solid var(--border-color);
             padding-bottom: 10px;
+            color: var(--text-primary);
         }
 
         .status-badge {
@@ -202,35 +266,41 @@
             justify-content: space-between;
             align-items: center;
             padding: 15px;
-            background: rgba(0, 0, 0, 0.3);
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
             border-radius: 10px;
             margin-bottom: 10px;
         }
 
+        [data-theme="dark"] .metric {
+            background: rgba(0, 0, 0, 0.3);
+        }
+
         .metric-label {
             font-size: 1em;
-            color: #ccc;
+            color: var(--text-muted);
         }
 
         .metric-value {
             font-size: 1.8em;
             font-weight: bold;
+            color: var(--text-primary);
         }
 
         .chart-container {
             grid-column: 1 / -1;
-            background: rgba(255, 255, 255, 0.05);
+            background: var(--bg-card);
             border-radius: 15px;
             padding: 25px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--border-color);
         }
 
         .map-container {
             grid-column: 1 / -1;
-            background: rgba(255, 255, 255, 0.05);
+            background: var(--bg-card);
             border-radius: 15px;
             padding: 25px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--border-color);
             min-height: 750px;
         }
 
@@ -242,7 +312,7 @@
         }
 
         .map-description {
-            color: #aaa;
+            color: var(--text-muted);
             margin-bottom: 15px;
             font-size: 0.95em;
             line-height: 1.6;
@@ -254,7 +324,7 @@
             border: none;
             border-radius: 10px;
             background: white;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 4px 15px var(--shadow-color);
         }
 
         .single-map-iframe {
@@ -263,11 +333,12 @@
             border: none;
             border-radius: 10px;
             background: white;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 4px 15px var(--shadow-color);
         }
 
         .map-card {
-            background: rgba(255, 255, 255, 0.08);
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
             border-radius: 10px;
             padding: 15px;
         }
@@ -275,7 +346,7 @@
         .map-card h3 {
             margin: 0 0 15px 0;
             font-size: 1.2em;
-            color: #dedede;
+            color: var(--text-primary);
         }
 
         canvas {
@@ -341,8 +412,9 @@
             text-align: center;
             font-size: 2em;
             margin: 30px 0 20px 0;
-            color: #fff;
-            text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.5);
+            color: var(--section-title-color);
+            text-shadow: 2px 2px 8px var(--shadow-color);
+            font-weight: 700;
         }
 
         .map-info-box {
@@ -356,13 +428,13 @@
         .map-info-box h3 {
             margin: 0 0 10px 0;
             font-size: 1.1em;
-            color: #ffffff;
+            color: var(--text-primary);
         }
 
         .map-info-box p {
             margin: 5px 0;
             font-size: 0.9em;
-            color: #ccc;
+            color: var(--text-muted);
         }
 
         .tab-buttons {
@@ -401,6 +473,43 @@
 
         .tab-content.active {
             display: block;
+        }
+
+        /* Enhanced styling for light theme balance */
+        [data-theme="light"] .navbar {
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+        }
+
+        [data-theme="light"] .chart-container,
+        [data-theme="light"] .map-container {
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+        }
+
+        [data-theme="light"] .metric {
+            background: rgba(248, 250, 252, 0.8);
+            border: 1px solid rgba(0, 0, 0, 0.06);
+        }
+
+        /* Ensure proper contrast for main title in light mode */
+        [data-theme="light"] h1 {
+            color: #1e293b;
+            text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        /* Plume card styling */
+        .plume-description {
+            color: var(--text-muted);
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        .plume-features {
+            color: var(--text-muted);
+            font-size: 0.9em;
         }
 
         @media (max-width: 768px) {
@@ -452,6 +561,10 @@
                     </a>
                 </li>
             </ul>
+            <button class="theme-toggle" onclick="toggleTheme()">
+                <span class="theme-icon">🌙</span>
+                <span class="theme-text">Dark Mode</span>
+            </button>
             <div class="nav-toggle" onclick="toggleMenu()">
                 <span></span>
                 <span></span>
@@ -472,9 +585,7 @@
 
         <div id="dashboard" style="display: none;">
 
-            <div id="sensors" class="section-title">
-                <h1>ISOTOPER B15</h1> Real-Time Sensor Readings
-            </div>
+            <div id="sensors" class="section-title">📊 <h1>ISOTOPER B15</h1> Real-Time Sensor Readings</div>
 
             <div class="grid">
                 <div class="card">
@@ -517,7 +628,7 @@
                 <div class="card">
                     <h2>☢️ Radiation Level</h2>
                     <div class="metric">
-                        <span class="metric-label">Effective Dose Rate</span>
+                        <span class="metric-label">Dose Rate</span>
                         <span class="metric-value" id="dose">--</span>
                     </div>
                     <div class="metric">
@@ -562,13 +673,13 @@
                 <div class="card"
                     style="grid-column: 1 / -1; text-align: center; background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%); border: 2px solid rgba(102, 126, 234, 0.3);">
                     <h2>🌪️ Gaussian Plume Dispersion Model</h2>
-                    <p style="color: #ccc; margin-bottom: 20px; line-height: 1.6;">
+                    <p class="plume-description">
                         Advanced atmospheric dispersion modeling with real-time weather integration.<br>
                         Visualize pollution plumes, concentration fields, and environmental impact analysis.
                     </p>
                     <div
                         style="display: flex; gap: 15px; justify-content: center; align-items: center; flex-wrap: wrap;">
-                        <div style="color: #aaa; font-size: 0.9em;">
+                        <div class="plume-features">
                             ✅ Real-time Weather Data &nbsp;&nbsp;
                             ✅ 3D Concentration Fields &nbsp;&nbsp;
                             ✅ Interactive Mapping
@@ -824,7 +935,7 @@
                 data: {
                     labels: timestamps,
                     datasets: [{
-                        label: 'Effective Dose Rate (µSv/h)',
+                        label: 'Dose Rate (µSv/h)',
                         data: doses,
                         borderColor: '#ff6384',
                         backgroundColor: 'rgba(255, 99, 132, 0.1)',
@@ -906,6 +1017,8 @@
         }
 
         async function init() {
+            // Initialize theme on page load
+            initTheme();
             await fetchAllData();
         }
 
@@ -915,6 +1028,73 @@
             const navToggle = document.querySelector('.nav-toggle');
             navMenu.classList.toggle('active');
             navToggle.classList.toggle('active');
+        }
+
+        // ===== THEME TOGGLE =====
+        let currentTheme = localStorage.getItem('theme') || 'light';
+
+        function toggleTheme() {
+            currentTheme = currentTheme === 'light' ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', currentTheme);
+
+            const themeIcon = document.querySelector('.theme-icon');
+            const themeText = document.querySelector('.theme-text');
+
+            if (currentTheme === 'dark') {
+                themeIcon.textContent = '☀️';
+                themeText.textContent = 'Light Mode';
+            } else {
+                themeIcon.textContent = '🌙';
+                themeText.textContent = 'Dark Mode';
+            }
+
+            // Save preference
+            localStorage.setItem('theme', currentTheme);
+
+            // Update chart colors
+            if (doseChart || envChart) {
+                updateChartsForTheme();
+            }
+        }
+
+        function initTheme() {
+            document.documentElement.setAttribute('data-theme', currentTheme);
+
+            const themeIcon = document.querySelector('.theme-icon');
+            const themeText = document.querySelector('.theme-text');
+
+            if (currentTheme === 'dark') {
+                themeIcon.textContent = '☀️';
+                themeText.textContent = 'Light Mode';
+            } else {
+                themeIcon.textContent = '🌙';
+                themeText.textContent = 'Dark Mode';
+            }
+        }
+
+        function updateChartsForTheme() {
+            const isDark = currentTheme === 'dark';
+            const textColor = isDark ? '#fff' : '#1a202c';
+            const gridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
+
+            if (doseChart) {
+                doseChart.options.plugins.legend.labels.color = textColor;
+                doseChart.options.scales.x.ticks.color = textColor;
+                doseChart.options.scales.x.grid.color = gridColor;
+                doseChart.options.scales.y.ticks.color = textColor;
+                doseChart.options.scales.y.grid.color = gridColor;
+                doseChart.update();
+            }
+
+            if (envChart) {
+                envChart.options.plugins.legend.labels.color = textColor;
+                envChart.options.scales.x.ticks.color = textColor;
+                envChart.options.scales.x.grid.color = gridColor;
+                envChart.options.scales.y.ticks.color = textColor;
+                envChart.options.scales.y.grid.color = gridColor;
+                envChart.options.scales.y1.ticks.color = textColor;
+                envChart.update();
+            }
         }
 
         // Smooth scrolling for anchor links
