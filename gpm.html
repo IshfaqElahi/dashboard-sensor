@@ -1974,9 +1974,15 @@
         }
 
         function adcToPPM(adc, Ro, RL) {
-            var Vc = 5.0, v = adc * (Vc / 1023);
+            // FIX: ESP32 uses a 3.3V reference and 12-bit (4095) resolution
+            var v = adc * (3.3 / 4095.0);
             if (v < 0.001) return 0;
-            var Rs = ((Vc - v) / v) * RL, ratio = Rs / Ro;
+
+            // The physical MQ-8 hardware circuit still operates on 5V
+            var Vc = 5.0;
+            var Rs = ((Vc - v) / v) * RL;
+            var ratio = Rs / Ro;
+
             return Math.max(0, 987.99 * Math.pow(Math.max(ratio, 0.001), -2.162));
         }
 
@@ -2008,8 +2014,8 @@
                 const Ro = parseFloat(document.getElementById('mq8Ro').value) || 10;
                 const RL = parseFloat(document.getElementById('mq8RL').value) || 10;
 
-                // 1. Convert ADC to Voltage and Rs/Ro
-                const volt = adc * (5.0 / 1023.0);
+                // 1. Convert ADC to Voltage and Rs/Ro (FIXED FOR ESP32)
+                const volt = adc * (3.3 / 4095.0);
                 const Rs = ((5.0 - volt) / volt) * RL;
                 const ratio = Rs / Ro;
 
