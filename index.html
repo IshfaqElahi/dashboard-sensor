@@ -56,18 +56,33 @@
             backdrop-filter: blur(15px);
             border: 1px solid var(--nav-border);
             border-radius: 15px;
-            padding: 15px 25px;
-            margin-bottom: 30px;
+            padding: 10px 20px;
+            margin-bottom: 20px;
             box-shadow: 0 8px 32px var(--shadow-color);
             transition: all 0.3s ease;
+
+            /* --- OPTIMAL SHAPE CONSTRAINTS --- */
+            max-width: 1400px;
+            /* Limits the horizontal stretch of the bar */
+            margin-left: auto;
+            /* Centers the box */
+            margin-right: auto;
+            /* Centers the box */
+            width: 95%;
+            /* Keeps it responsive on smaller screens */
+
+            /* --- SCROLLING --- */
+            position: sticky;
+            top: 20px;
+            z-index: 9999;
         }
 
         .nav-container {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            max-width: 1400px;
-            margin: 0 auto;
+            width: 100%;
+            /* Now follows the parent navbar's optimal width */
         }
 
         .nav-brand {
@@ -111,9 +126,10 @@
             box-shadow: 0 5px 15px var(--shadow-color);
         }
 
-        .nav-link.active {
+        .nav-link:hover {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
+            transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
         }
 
@@ -537,7 +553,7 @@
     <nav class="navbar">
         <div class="nav-container">
             <a href="#" class="nav-brand">
-                🛰️ ISOTOPER B15
+                ISOTOPER B15
             </a>
             <ul class="nav-menu">
                 <li class="nav-item">
@@ -553,6 +569,11 @@
                 <li class="nav-item">
                     <a href="#sensors" class="nav-link">
                         📡 Sensors
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#trends" class="nav-link">
+                        📈 Trends
                     </a>
                 </li>
                 <li class="nav-item">
@@ -654,7 +675,7 @@
             </div>
 
             <div class="section-divider"></div>
-            <div class="section-title">📈 Historical Trends</div>
+            <div id="trends" class="section-title">Historical Trends</div>
 
             <div class="grid">
                 <div class="chart-container">
@@ -673,7 +694,7 @@
             <!-- Gaussian Plume Model Card -->
             <div class="grid">
                 <div class="card"
-                    style="grid-column: 1 / -1; text-align: center; background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%); border: 2px solid rgba(102, 126, 234, 0.3);">
+                    style="grid-column: 1 / -1; max-width: 850px; margin: 0 auto; width: 100%; text-align: center; background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%); border: 2px solid rgba(102, 126, 234, 0.3);">
                     <h2>🌪️ Gaussian Plume Dispersion Model</h2>
                     <p class="plume-description">
                         Advanced atmospheric dispersion modeling with real-time weather integration.<br>
@@ -697,7 +718,7 @@
             </div>
 
             <div class="section-divider"></div>
-            <div id="maps" class="section-title">🗺️ Radiation Dispersion - Spatial Analysis</div>
+            <div id="maps" class="section-title">Radiation Dispersion - Spatial Analysis</div>
 
             <div class="grid">
                 <div class="map-container">
@@ -930,6 +951,11 @@
             const timestamps = history.map(row => new Date(row.timestamp).toLocaleTimeString());
             const doses = history.map(row => row.dose);
 
+            // Determine correct colors based on current theme
+            const isDark = currentTheme === 'dark';
+            const textColor = isDark ? '#fff' : '#1a202c';
+            const gridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
+
             if (doseChart) doseChart.destroy();
             const doseCtx = document.getElementById('doseChart').getContext('2d');
             doseChart = new Chart(doseCtx, {
@@ -942,16 +968,29 @@
                         borderColor: '#ff6384',
                         backgroundColor: 'rgba(255, 99, 132, 0.1)',
                         tension: 0.4,
-                        fill: true
+                        fill: true,
+                        pointRadius: 2,
+                        pointHoverRadius: 5
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { labels: { color: '#fff' } } },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                color: textColor,
+                                font: { family: "'Inter', sans-serif", size: 13, weight: '500' },
+                                usePointStyle: true,
+                                padding: 20
+                            }
+                        }
+                    },
                     scales: {
-                        x: { ticks: { color: '#aaa' }, grid: { color: 'rgba(255,255,255,0.1)' } },
-                        y: { ticks: { color: '#aaa' }, grid: { color: 'rgba(255,255,255,0.1)' } }
+                        x: { ticks: { color: textColor }, grid: { color: gridColor } },
+                        y: { ticks: { color: textColor }, grid: { color: gridColor } }
                     }
                 }
             });
@@ -962,6 +1001,11 @@
             const timestamps = history.map(row => new Date(row.timestamp).toLocaleTimeString());
             const temps = history.map(row => row.temperature);
             const humidities = history.map(row => row.humidity);
+
+            // Determine correct colors based on current theme
+            const isDark = currentTheme === 'dark';
+            const textColor = isDark ? '#fff' : '#1a202c';
+            const gridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
 
             if (envChart) envChart.destroy();
             const envCtx = document.getElementById('envChart').getContext('2d');
@@ -976,7 +1020,9 @@
                             borderColor: '#36a2eb',
                             backgroundColor: 'rgba(54, 162, 235, 0.1)',
                             tension: 0.4,
-                            yAxisID: 'y'
+                            yAxisID: 'y',
+                            pointRadius: 2,
+                            pointHoverRadius: 5
                         },
                         {
                             label: 'Humidity (%)',
@@ -984,26 +1030,39 @@
                             borderColor: '#4bc0c0',
                             backgroundColor: 'rgba(75, 192, 192, 0.1)',
                             tension: 0.4,
-                            yAxisID: 'y1'
+                            yAxisID: 'y1',
+                            pointRadius: 2,
+                            pointHoverRadius: 5
                         }
                     ]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { labels: { color: '#fff' } } },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                color: textColor,
+                                font: { family: "'Inter', sans-serif", size: 13, weight: '500' },
+                                usePointStyle: true,
+                                padding: 20
+                            }
+                        }
+                    },
                     scales: {
-                        x: { ticks: { color: '#aaa' }, grid: { color: 'rgba(255,255,255,0.1)' } },
+                        x: { ticks: { color: textColor }, grid: { color: gridColor } },
                         y: {
                             type: 'linear',
                             position: 'left',
-                            ticks: { color: '#aaa' },
-                            grid: { color: 'rgba(255,255,255,0.1)' }
+                            ticks: { color: textColor },
+                            grid: { color: gridColor }
                         },
                         y1: {
                             type: 'linear',
                             position: 'right',
-                            ticks: { color: '#aaa' },
+                            ticks: { color: textColor },
                             grid: { display: false }
                         }
                     }
