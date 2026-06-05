@@ -5,7 +5,7 @@
 
 ## ⚡ Key Features
 * **Real-Time Sensor Telemetry:** Live synchronization with hardware arrays processing Ambient Temperature, Relative Humidity, Hydrogen Gas [MQ-8] concentration, and Radiation Dosimetry.
-* **Gaussian Dispersion Engine:** Integrated mathematical atmospheric modeling cross-linked with live meteorological APIs to generate 3D pollution and radiation plume trajectories.
+* **Gaussian Dispersion Model:** Integrated mathematical atmospheric modeling cross-linked with live meteorological APIs to generate 3D pollution and radiation plume trajectories.
 * **Dual-Matrix Spatial Mapping:** Interactive cartography featuring both discrete UAV measurement nodes and continuous, algorithmically interpolated radiation distribution fields.
 * **Critical Alert Protocol:** Built-in threshold logic that automatically triggers pulsating visual warnings and UI shifts when hazardous parameters are intercepted.
 * **Fluid Responsive Interface:** Custom-engineered layout that morphs seamlessly across mobile and desktop displays without sacrificing data density.
