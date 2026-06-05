@@ -25,14 +25,20 @@ Data streams and historical matrices are handled via a robust integration of spe
 
 ## 📁 Repository Structure
 
-```text
 dashboard-sensor-main/
 │
-├── index.html                       # Main Telemetry Dashboard & UI Hub
-├── gpm.html                         # Gaussian Dispersion Protocol Engine
-├── radiation_map_light.html         # Absolute Node Cartography Map
-├── radiation_dispersion_map.html    # Interpolated Distribution Matrix Map
-├── radiation_map_light.py           # Python script for geospatial data processing
+├── index.html                       
+├── gpm.html                         
 │
-└── .github/workflows/
-    └── static.yml                   # GitHub Actions automated deployment configuration
+├── css/
+│   ├── styles.css                   
+│   └── gpm-styles.css               
+│
+├── js/
+│   ├── script.js                    
+│   └── gpm-script.js                
+│
+├── radiation_map_light.py           
+│
+└── radiation_map_light.html         
+└── radiation_dispersion_map.html    
