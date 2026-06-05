@@ -1,38 +1,72 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Environmental & Radiation Monitor</title>
+    <title>ISOTOPER B15 · Core Telemetry</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
+        rel="stylesheet">
     <style>
         :root {
-            /* Light theme variables */
-            --bg-primary: linear-gradient(135deg, #f1f5f9, #e2e8f0, #cbd5e0);
-            --bg-card: rgba(255, 255, 255, 0.8);
-            --text-primary: #1a202c;
-            --text-secondary: #4a5568;
-            --text-muted: #718096;
-            --border-color: rgba(0, 0, 0, 0.1);
-            --shadow-color: rgba(0, 0, 0, 0.1);
-            --nav-bg: rgba(255, 255, 255, 0.9);
-            --nav-border: rgba(0, 0, 0, 0.1);
-            --section-title-color: #1e293b;
+            /* HIGH CONTRAST Light Theme - Deepened for maximum card pop */
+            --bg-primary: #E2E8F0;
+            --bg-card: #FFFFFF;
+            --text-primary: #0F172A;
+            --text-secondary: #1E293B;
+            --text-muted: #475569;
+            --border-color: #94A3B8;
+            /* Strong, visible structural borders */
+            --shadow-color: rgba(15, 23, 42, 0.15);
+            --nav-bg: rgba(255, 255, 255, 0.95);
+            --nav-border: #64748B;
+            --section-title-color: #0F172A;
+
+            /* Status Colors */
+            --safe-color: #059669;
+            --safe-bg: rgba(5, 150, 105, 0.15);
+            --safe-border: rgba(5, 150, 105, 0.5);
+
+            --warn-color: #D97706;
+            --warn-bg: rgba(217, 119, 6, 0.15);
+            --warn-border: rgba(217, 119, 6, 0.5);
+
+            --danger-color: #DC2626;
+            --danger-bg: rgba(220, 38, 38, 0.15);
+            --danger-border: rgba(220, 38, 38, 0.6);
+
+            --accent-color: #2563EB;
         }
 
         [data-theme="dark"] {
-            /* Dark theme variables */
-            --bg-primary: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
-            --bg-card: rgba(255, 255, 255, 0.05);
-            --text-primary: #fff;
-            --text-secondary: #e2e8f0;
-            --text-muted: #a0aec0;
-            --border-color: rgba(255, 255, 255, 0.1);
-            --shadow-color: rgba(0, 0, 0, 0.3);
-            --nav-bg: rgba(255, 255, 255, 0.1);
-            --nav-border: rgba(255, 255, 255, 0.2);
-            --section-title-color: #fff;
+            /* Dark Theme - Space-Tech Cyber */
+            --bg-primary: #0F1115;
+            --bg-card: #1A1D24;
+            --text-primary: #F3F4F6;
+            --text-secondary: #9CA3AF;
+            --text-muted: #6B7280;
+            --border-color: rgba(243, 244, 246, 0.1);
+            --shadow-color: rgba(0, 0, 0, 0.5);
+            --nav-bg: rgba(26, 29, 36, 0.85);
+            --nav-border: rgba(243, 244, 246, 0.15);
+            --section-title-color: #F3F4F6;
+
+            /* Status Colors */
+            --safe-color: #34D399;
+            --safe-bg: rgba(52, 211, 153, 0.1);
+            --safe-border: rgba(52, 211, 153, 0.3);
+
+            --warn-color: #FBBF24;
+            --warn-bg: rgba(251, 191, 36, 0.1);
+            --warn-border: rgba(251, 191, 36, 0.3);
+
+            --danger-color: #F87171;
+            --danger-bg: rgba(248, 113, 113, 0.1);
+            --danger-border: var(--danger-color);
+
+            --accent-color: #38BDF8;
         }
 
         * {
@@ -42,39 +76,103 @@
         }
 
         body {
-            font-family: 'Poppins', 'Segoe UI', Tahoma, sans-serif;
+            font-family: 'Inter', -apple-system, sans-serif;
             background: var(--bg-primary);
             min-height: 100vh;
-            padding: 20px;
+            padding: 110px 20px 20px 20px;
+            /* Offset for top fixed nav */
             color: var(--text-primary);
-            transition: all 0.3s ease;
+            transition: background-color 0.4s ease, color 0.4s ease;
+            overflow-x: hidden;
         }
 
-        /* Navigation Bar Styles */
+        h1,
+        h2,
+        h3,
+        .nav-brand,
+        .section-title,
+        .status-badge {
+            font-family: 'Space Grotesk', sans-serif;
+        }
+
+        .metric-value,
+        .metric-label,
+        .last-update,
+        code,
+        .nav-link,
+        .tab-button,
+        .theme-text {
+            font-family: 'Geist Mono', monospace;
+        }
+
+        /* LIVE BLINKING INDICATOR */
+        .live-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-family: 'Geist Mono', monospace;
+            font-size: 0.75rem;
+            color: var(--danger-color);
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            background: var(--danger-bg);
+            padding: 4px 10px;
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            border-radius: 4px;
+        }
+
+        .live-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background-color: var(--danger-color);
+            box-shadow: 0 0 8px var(--danger-color);
+            animation: pulse-red 1.5s infinite;
+        }
+
+        @keyframes pulse-red {
+            0% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.4;
+                transform: scale(0.85);
+                box-shadow: 0 0 2px var(--danger-color);
+            }
+
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        /* ------------------------------------------------------------- */
+        /* ADVANCED SCROLL-MORPHING NAVIGATION BAR                       */
+        /* ------------------------------------------------------------- */
         .navbar {
-            background: var(--nav-bg);
-            backdrop-filter: blur(15px);
-            border: 1px solid var(--nav-border);
-            border-radius: 15px;
-            padding: 10px 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 8px 32px var(--shadow-color);
-            transition: all 0.3s ease;
-
-            /* --- OPTIMAL SHAPE CONSTRAINTS --- */
-            max-width: 1400px;
-            /* Limits the horizontal stretch of the bar */
-            margin-left: auto;
-            /* Centers the box */
-            margin-right: auto;
-            /* Centers the box */
-            width: 95%;
-            /* Keeps it responsive on smaller screens */
-
-            /* --- SCROLLING --- */
-            position: sticky;
+            position: fixed;
             top: 20px;
+            left: 20px;
+            right: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+            height: 72px;
+            /* Explicit height to prevent jitter */
+            background: var(--nav-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--nav-border);
+            border-radius: 12px;
+            padding: 0 24px;
+            box-shadow: 0 8px 30px var(--shadow-color);
             z-index: 9999;
+            display: flex;
+            align-items: center;
+            overflow: hidden;
+            /* Ultra-smooth exponential ease-out to kill jitter */
+            transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
         .nav-container {
@@ -82,80 +180,245 @@
             justify-content: space-between;
             align-items: center;
             width: 100%;
-            /* Now follows the parent navbar's optimal width */
+            height: 100%;
+            transition: all 0.6s ease;
         }
 
         .nav-brand {
-            font-size: 1.5em;
-            font-weight: bold;
+            font-size: 1.25rem;
+            font-weight: 700;
             color: var(--text-primary);
             text-decoration: none;
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 16px;
+            letter-spacing: 0.05em;
         }
 
         .nav-menu {
             display: flex;
-            gap: 25px;
+            gap: 12px;
             list-style: none;
             align-items: center;
         }
 
         .nav-item {
-            position: relative;
+            width: 100%;
+            display: flex;
+            justify-content: flex-start;
         }
 
         .nav-link {
-            color: var(--text-primary);
+            color: var(--text-secondary);
             text-decoration: none;
-            padding: 10px 20px;
-            border-radius: 25px;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-weight: 500;
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
+            padding: 8px 16px;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+            border: 1px solid transparent;
+            background: transparent;
         }
 
-        .nav-link:hover {
-            background: rgba(102, 126, 234, 0.1);
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px var(--shadow-color);
+        .nav-link:hover,
+        .nav-link.active {
+            color: var(--accent-color);
+            background: rgba(37, 99, 235, 0.08);
+            border: 1px solid rgba(37, 99, 235, 0.3);
+            transform: translateY(-1px);
         }
 
-        .nav-link:hover {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        [data-theme="dark"] .nav-link:hover,
+        [data-theme="dark"] .nav-link.active {
+            background: rgba(56, 189, 248, 0.08);
+            border-color: rgba(56, 189, 248, 0.3);
         }
 
-        /* Theme Toggle Button */
+        /* ------------------------------------------------------------- */
+        /* SPACING FOR THE SPECIAL DISPERSION BUTTON                     */
+        /* ------------------------------------------------------------- */
+        .special-nav-item {
+            margin-left: 24px;
+            /* Default horizontal separation */
+        }
+
+        /* ------------------------------------------------------------- */
+        /* ADVANCED GLOW & COLOR FILL FOR DISPERSION MODEL NAV LINK      */
+        /* ------------------------------------------------------------- */
+        .nav-link.special-glow {
+            border: 1px solid var(--accent-color);
+            color: var(--accent-color);
+            position: relative;
+            overflow: hidden;
+            /* Keeps the color sweep inside the button bounds */
+            z-index: 1;
+            /* Ensures text stays above the background fill */
+            transition: color 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s ease;
+            animation: pulse-glow-light 2s infinite alternate;
+        }
+
+        [data-theme="dark"] .nav-link.special-glow {
+            animation: pulse-glow-dark 2s infinite alternate;
+        }
+
+        /* The sweeping background layer (starts off-screen to the left) */
+        .nav-link.special-glow::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: var(--accent-color);
+            transition: left 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            z-index: -1;
+            /* Pushes the solid color behind the text */
+        }
+
+        /* Hover Actions */
+        .nav-link.special-glow:hover {
+            color: #FFFFFF !important;
+            /* Pure white text for light mode */
+            box-shadow: 0 0 20px var(--accent-color);
+            /* Surges the glow */
+            animation: none;
+            /* Pauses the idle pulse while hovering */
+        }
+
+        [data-theme="dark"] .nav-link.special-glow:hover {
+            color: #0F1115 !important;
+            /* Deep dark ink text for dark mode (contrast) */
+        }
+
+        /* Triggers the color sweep */
+        .nav-link.special-glow:hover::before {
+            left: 0;
+        }
+
+        /* Idle Pulsing Animations */
+        @keyframes pulse-glow-light {
+            0% {
+                box-shadow: 0 0 5px rgba(37, 99, 235, 0.2);
+                background: rgba(37, 99, 235, 0.05);
+            }
+
+            100% {
+                box-shadow: 0 0 15px rgba(37, 99, 235, 0.5);
+                background: rgba(37, 99, 235, 0.15);
+            }
+        }
+
+        @keyframes pulse-glow-dark {
+            0% {
+                box-shadow: 0 0 5px rgba(56, 189, 248, 0.2);
+                background: rgba(56, 189, 248, 0.05);
+            }
+
+            100% {
+                box-shadow: 0 0 15px rgba(56, 189, 248, 0.5);
+                background: rgba(56, 189, 248, 0.15);
+            }
+        }
+
+        /* ------------------------------------------------------------- */
+        /* THEME TOGGLE BUTTON                                           */
+        /* ------------------------------------------------------------- */
         .theme-toggle {
             background: var(--bg-card);
-            border: 2px solid var(--border-color);
-            border-radius: 25px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
             padding: 8px 16px;
             cursor: pointer;
-            font-size: 1.1em;
             color: var(--text-primary);
-            transition: all 0.3s ease;
+            transition: all 0.2s ease;
             display: flex;
             align-items: center;
             gap: 8px;
-            font-weight: 500;
             margin-left: 15px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
         }
 
         .theme-toggle:hover {
-            background: rgba(102, 126, 234, 0.1);
+            border-color: var(--accent-color);
+            color: var(--accent-color);
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px var(--shadow-color);
         }
 
+        .theme-text {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+
+        /* SCROLLED VERTICAL FULL-HEIGHT STATE (Desktop Only) */
+        @media (min-width: 901px) {
+            .navbar.scrolled {
+                top: 20px;
+                left: calc(100% - 220px);
+                width: 200px;
+                height: calc(100vh - 40px);
+                padding: 30px 16px;
+                border-radius: 16px;
+                margin: 0;
+                align-items: flex-start;
+            }
+
+            .navbar.scrolled .nav-container {
+                flex-direction: column;
+                justify-content: flex-start;
+                gap: 20px;
+                height: 100%;
+            }
+
+            .navbar.scrolled .nav-brand {
+                flex-direction: column;
+                text-align: center;
+                gap: 16px;
+                margin-bottom: 20px;
+            }
+
+            .navbar.scrolled .nav-menu {
+                flex-direction: column;
+                width: 100%;
+                gap: 10px;
+            }
+
+            .navbar.scrolled .nav-link {
+                width: 100%;
+                text-align: left;
+                justify-content: flex-start;
+                padding: 12px 16px;
+            }
+
+            .navbar.scrolled .special-nav-item {
+                margin-left: 0;
+                margin-top: 24px;
+                /* Vertical separation when morphed */
+                width: 100%;
+            }
+
+            .navbar.scrolled .theme-toggle {
+                margin-left: 0;
+                width: 100%;
+                justify-content: center;
+                margin-top: auto;
+            }
+
+            /* Fluid layout expansion to close the gap */
+            .container {
+                transition: max-width 0.6s cubic-bezier(0.16, 1, 0.3, 1), padding-right 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+            }
+
+            body.nav-is-scrolled .container {
+                max-width: 100%;
+                padding-left: 40px;
+                padding-right: 320px;
+            }
+        }
+
+        /* Mobile Nav Overrides */
         .nav-toggle {
             display: none;
             flex-direction: column;
@@ -165,158 +428,227 @@
 
         .nav-toggle span {
             width: 25px;
-            height: 3px;
+            height: 2px;
             background: var(--text-primary);
-            border-radius: 2px;
             transition: 0.3s;
         }
 
-        @media (max-width: 768px) {
+        @media (max-width: 900px) {
             .nav-menu {
-                position: fixed;
-                top: 80px;
-                left: -100%;
+                display: none;
+                position: absolute;
+                top: 100%;
+                left: 0;
                 width: 100%;
-                height: calc(100vh - 80px);
-                background: rgba(15, 12, 41, 0.95);
-                backdrop-filter: blur(15px);
+                background: var(--bg-card);
+                border: 1px solid var(--border-color);
                 flex-direction: column;
-                justify-content: flex-start;
-                align-items: center;
-                padding-top: 50px;
-                transition: left 0.3s ease;
-                z-index: 1000;
+                padding: 10px;
+                border-radius: 8px;
+                margin-top: 10px;
             }
 
             .nav-menu.active {
-                left: 0;
+                display: flex;
             }
 
             .nav-toggle {
                 display: flex;
             }
 
-            .nav-link {
-                padding: 15px 30px;
-                font-size: 1.1em;
+            .special-nav-item {
+                margin-left: 0;
+                margin-top: 10px;
             }
         }
 
+        /* MAIN DASHBOARD STRUCTURE */
         .container {
             max-width: 1400px;
             margin: 0 auto;
+            position: relative;
         }
 
-        h1 {
+        h1.main-title {
             text-align: center;
-            font-size: 2.5em;
-            margin-bottom: 10px;
-            text-shadow: 2px 2px 10px var(--shadow-color);
+            font-size: 2.2rem;
+            margin-bottom: 5px;
             color: var(--text-primary);
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
         }
 
         .subtitle {
             text-align: center;
             color: var(--text-muted);
-            margin-bottom: 30px;
+            margin-bottom: 40px;
+            font-family: 'Geist Mono', monospace;
+            font-size: 0.85rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            font-weight: 600;
         }
 
         .grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 24px;
             margin-bottom: 30px;
         }
 
+        /* ADVANCED HIGH-CONTRAST CARDS */
         .card {
             background: var(--bg-card);
-            backdrop-filter: blur(15px);
-            border-radius: 15px;
-            padding: 25px;
-            border: 1px solid var(--border-color);
-            box-shadow: 0 8px 32px var(--shadow-color);
+            border-radius: 12px;
+            padding: 24px;
+            border: 2px solid var(--border-color);
+            /* Thicker border for contrast */
+            box-shadow: 0 4px 15px var(--shadow-color);
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.4s ease, border-color 0.4s ease;
+
+            /* Staggered load animation */
+            animation: fadeUp 0.6s ease-out forwards;
+            opacity: 0;
+            transform: translateY(30px);
         }
 
-        /* Enhanced card styling for light theme */
-        [data-theme="light"] .card {
-            background: rgba(255, 255, 255, 0.95);
-            border: 1px solid rgba(0, 0, 0, 0.08);
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+        @keyframes fadeUp {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .grid .card:nth-child(1) {
+            animation-delay: 0.1s;
+        }
+
+        .grid .card:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .grid .card:nth-child(3) {
+            animation-delay: 0.3s;
+        }
+
+        .grid .card:nth-child(4) {
+            animation-delay: 0.4s;
+        }
+
+        .card:hover {
+            border-color: var(--accent-color);
+            transform: translateY(-6px);
+            box-shadow: 0 16px 32px var(--shadow-color);
         }
 
         .card h2 {
-            font-size: 1.3em;
+            font-size: 1.1rem;
             margin-bottom: 20px;
-            border-bottom: 2px solid var(--border-color);
-            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 12px;
             color: var(--text-primary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 700;
         }
 
         .status-badge {
             display: inline-block;
-            padding: 10px 20px;
-            border-radius: 20px;
-            font-weight: bold;
-            font-size: 1.1em;
-            margin: 10px 0;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            padding: 6px 14px;
+            border-radius: 4px;
+            font-weight: 700;
+            font-size: 0.8rem;
+            margin: 15px 0 5px 0;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border: 1px solid transparent;
         }
 
         .safe {
-            background: #28a745;
-            color: white;
+            background: var(--safe-bg);
+            color: var(--safe-color);
+            border-color: var(--safe-border);
         }
 
         .warning {
-            background: #ffc107;
-            color: #000;
+            background: var(--warn-bg);
+            color: var(--warn-color);
+            border-color: var(--warn-border);
         }
 
         .danger {
-            background: #dc3545;
-            color: white;
+            background: var(--danger-bg);
+            color: var(--danger-color);
+            border-color: var(--danger-border);
+            animation: pulse-border 2s infinite;
+        }
+
+        @keyframes pulse-border {
+            0% {
+                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+            }
+
+            70% {
+                box-shadow: 0 0 0 6px rgba(239, 68, 68, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+            }
         }
 
         .metric {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 15px;
-            background: var(--bg-card);
+            padding: 12px 16px;
+            background: rgba(0, 0, 0, 0.04);
             border: 1px solid var(--border-color);
-            border-radius: 10px;
-            margin-bottom: 10px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            transition: background 0.3s ease;
         }
 
         [data-theme="dark"] .metric {
-            background: rgba(0, 0, 0, 0.3);
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .metric:hover {
+            background: rgba(37, 99, 235, 0.08);
+        }
+
+        [data-theme="dark"] .metric:hover {
+            background: rgba(56, 189, 248, 0.08);
         }
 
         .metric-label {
-            font-size: 1em;
-            color: var(--text-muted);
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
         }
 
         .metric-value {
-            font-size: 1.8em;
-            font-weight: bold;
+            font-size: 1.4rem;
+            font-weight: 700;
             color: var(--text-primary);
         }
 
-        .chart-container {
-            grid-column: 1 / -1;
-            background: var(--bg-card);
-            border-radius: 15px;
-            padding: 25px;
-            border: 1px solid var(--border-color);
-        }
-
+        .chart-container,
         .map-container {
             grid-column: 1 / -1;
             background: var(--bg-card);
-            border-radius: 15px;
-            padding: 25px;
-            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 24px;
+            border: 2px solid var(--border-color);
+            box-shadow: 0 4px 15px var(--shadow-color);
+            animation: fadeUp 0.6s ease-out 0.5s forwards;
+            opacity: 0;
+            transform: translateY(30px);
+        }
+
+        .map-container {
             min-height: 750px;
         }
 
@@ -328,41 +660,45 @@
         }
 
         .map-description {
-            color: var(--text-muted);
+            color: var(--text-secondary);
             margin-bottom: 15px;
-            font-size: 0.95em;
+            font-size: 0.9rem;
             line-height: 1.6;
         }
 
-        .map-iframe {
+        .map-iframe,
+        .single-map-iframe {
             width: 100%;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: var(--bg-primary);
+        }
+
+        .map-iframe {
             height: 650px;
-            border: none;
-            border-radius: 10px;
-            background: white;
-            box-shadow: 0 4px 15px var(--shadow-color);
         }
 
         .single-map-iframe {
-            width: 100%;
             height: 700px;
-            border: none;
-            border-radius: 10px;
-            background: white;
-            box-shadow: 0 4px 15px var(--shadow-color);
         }
 
         .map-card {
-            background: var(--bg-card);
+            background: rgba(0, 0, 0, 0.03);
             border: 1px solid var(--border-color);
-            border-radius: 10px;
-            padding: 15px;
+            border-radius: 6px;
+            padding: 16px;
+        }
+
+        [data-theme="dark"] .map-card {
+            background: rgba(255, 255, 255, 0.02);
         }
 
         .map-card h3 {
             margin: 0 0 15px 0;
-            font-size: 1.2em;
+            font-size: 1rem;
             color: var(--text-primary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
 
         canvas {
@@ -371,116 +707,153 @@
         }
 
         .last-update {
-            text-align: center;
-            color: #888;
-            margin-top: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 24px;
+            color: var(--text-muted);
+            margin-top: 30px;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            font-weight: 600;
         }
 
+        .last-update span {
+            color: var(--text-primary);
+            font-weight: 700;
+        }
+
+        /* ADVANCED WARNING BANNER */
         .alert-banner {
-            background: #dc3545;
-            color: white;
-            padding: 15px;
-            border-radius: 10px;
+            background: repeating-linear-gradient(45deg,
+                    #820000,
+                    #820000 10px,
+                    #A20000 10px,
+                    #A20000 20px);
+            color: #FFFFFF;
+            padding: 16px;
+            border-radius: 6px;
             text-align: center;
-            font-size: 1.2em;
-            font-weight: bold;
-            margin-bottom: 20px;
-            animation: pulse 2s infinite;
+            font-size: 0.9rem;
+            font-weight: 700;
+            margin-bottom: 24px;
+            font-family: 'Geist Mono', monospace;
+            letter-spacing: 0.1em;
+            border: 1px solid #FF0000;
+            box-shadow: 0 0 15px rgba(255, 0, 0, 0.3);
             display: none;
-        }
-
-        @keyframes pulse {
-
-            0%,
-            100% {
-                opacity: 1;
-            }
-
-            50% {
-                opacity: 0.7;
-            }
+            text-transform: uppercase;
         }
 
         .loading {
             text-align: center;
-            font-size: 1.5em;
+            font-size: 1rem;
             padding: 50px;
+            font-family: 'Geist Mono', monospace;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
         }
 
         .error {
-            background: rgba(220, 53, 69, 0.2);
-            border: 1px solid #dc3545;
-            color: #ff6b6b;
-            padding: 15px;
-            border-radius: 10px;
-            margin-bottom: 20px;
+            background: var(--danger-bg);
+            border: 1px solid var(--danger-color);
+            color: var(--danger-color);
+            padding: 16px;
+            border-radius: 6px;
+            margin-bottom: 24px;
+            font-family: 'Geist Mono', monospace;
+            font-size: 0.85rem;
         }
 
         .section-divider {
             grid-column: 1 / -1;
             height: 2px;
-            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
-            margin: 20px 0;
+            background: var(--border-color);
+            margin: 30px 0;
+            border-radius: 2px;
         }
 
         .section-title {
             grid-column: 1 / -1;
             text-align: center;
-            font-size: 2em;
-            margin: 30px 0 20px 0;
+            font-size: 1.5rem;
+            margin: 20px 0 30px 0;
             color: var(--section-title-color);
-            text-shadow: 2px 2px 8px var(--shadow-color);
             font-weight: 700;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .section-title span {
+            color: var(--accent-color);
         }
 
         .map-info-box {
-            background: rgba(255, 255, 255, 0.1);
-            border-left: 4px solid #f6f6f6;
-            padding: 15px;
-            border-radius: 5px;
-            margin-bottom: 15px;
+            background: rgba(0, 0, 0, 0.03);
+            border-left: 4px solid var(--accent-color);
+            padding: 16px;
+            border-radius: 0 6px 6px 0;
+            margin-bottom: 20px;
+            border-top: 1px solid var(--border-color);
+            border-right: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        [data-theme="dark"] .map-info-box {
+            background: rgba(255, 255, 255, 0.02);
         }
 
         .map-info-box h3 {
-            margin: 0 0 10px 0;
-            font-size: 1.1em;
+            margin: 0 0 8px 0;
+            font-size: 0.95rem;
             color: var(--text-primary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 700;
         }
 
         .map-info-box p {
-            margin: 5px 0;
-            font-size: 0.9em;
-            color: var(--text-muted);
+            margin: 4px 0;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
         }
 
         .tab-buttons {
             display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
+            gap: 12px;
+            margin-bottom: 24px;
             flex-wrap: wrap;
         }
 
         .tab-button {
-            padding: 12px 24px;
-            background: rgba(255, 255, 255, 0.1);
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            border-radius: 8px;
-            color: #fff;
+            padding: 10px 20px;
+            background: var(--bg-card);
+            border: 2px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-secondary);
             cursor: pointer;
-            transition: all 0.3s ease;
-            font-size: 1em;
-            font-weight: 500;
+            transition: all 0.2s ease;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            box-shadow: 0 2px 4px var(--shadow-color);
+            font-weight: 600;
         }
 
         .tab-button:hover {
-            background: rgba(255, 255, 255, 0.2);
-            border-color: #667eea;
+            border-color: var(--accent-color);
+            color: var(--accent-color);
+            transform: translateY(-2px);
         }
 
         .tab-button.active {
-            background: #667eea;
-            border-color: #667eea;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            background: rgba(37, 99, 235, 0.1);
+            border-color: var(--accent-color);
+            color: var(--accent-color);
+        }
+
+        [data-theme="dark"] .tab-button.active {
+            background: rgba(56, 189, 248, 0.1);
         }
 
         .tab-content {
@@ -489,48 +862,81 @@
 
         .tab-content.active {
             display: block;
-        }
-
-        /* Enhanced styling for light theme balance */
-        [data-theme="light"] .navbar {
-            background: rgba(255, 255, 255, 0.95);
-            border: 1px solid rgba(0, 0, 0, 0.08);
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
-        }
-
-        [data-theme="light"] .chart-container,
-        [data-theme="light"] .map-container {
-            background: rgba(255, 255, 255, 0.95);
-            border: 1px solid rgba(0, 0, 0, 0.08);
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
-        }
-
-        [data-theme="light"] .metric {
-            background: rgba(248, 250, 252, 0.8);
-            border: 1px solid rgba(0, 0, 0, 0.06);
-        }
-
-        /* Ensure proper contrast for main title in light mode */
-        [data-theme="light"] h1 {
-            color: #1e293b;
-            text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.15);
+            animation: fadeUp 0.4s ease-out forwards;
         }
 
         /* Plume card styling */
+        .plume-action-card {
+            grid-column: 1 / -1;
+            text-align: center;
+            background: rgba(37, 99, 235, 0.04);
+            border: 2px solid rgba(37, 99, 235, 0.3);
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        [data-theme="dark"] .plume-action-card {
+            background: rgba(56, 189, 248, 0.04);
+            border: 2px solid rgba(56, 189, 248, 0.3);
+        }
+
         .plume-description {
-            color: var(--text-muted);
+            color: var(--text-secondary);
             margin-bottom: 20px;
             line-height: 1.6;
+            font-size: 0.95rem;
         }
 
         .plume-features {
-            color: var(--text-muted);
-            font-size: 0.9em;
+            color: var(--text-primary);
+            font-family: 'Geist Mono', monospace;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            opacity: 0.85;
+            font-weight: 600;
+        }
+
+        .btn-launch {
+            display: inline-block;
+            margin-top: 24px;
+            padding: 14px 36px;
+            background: var(--accent-color);
+            color: #FFFFFF;
+            border: 2px solid var(--accent-color);
+            text-decoration: none;
+            border-radius: 6px;
+            font-family: 'Geist Mono', monospace;
+            font-weight: 700;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3);
+        }
+
+        .btn-launch:hover {
+            box-shadow: 0 8px 25px rgba(37, 99, 235, 0.5);
+            transform: translateY(-3px);
+            background: transparent;
+            color: var(--accent-color);
+        }
+
+        [data-theme="dark"] .btn-launch {
+            color: #0F1115;
+            box-shadow: 0 4px 15px rgba(56, 189, 248, 0.3);
+        }
+
+        [data-theme="dark"] .btn-launch:hover {
+            color: var(--accent-color);
+            box-shadow: 0 8px 25px rgba(56, 189, 248, 0.5);
         }
 
         @media (max-width: 768px) {
-            h1 {
-                font-size: 1.8em;
+            h1.main-title {
+                font-size: 1.5rem;
             }
 
             .map-grid {
@@ -544,103 +950,99 @@
             .single-map-iframe {
                 height: 550px;
             }
+
+            .plume-features {
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .last-update {
+                flex-direction: column;
+                gap: 8px;
+                align-items: center;
+            }
+
+            body {
+                padding-top: 100px;
+            }
         }
     </style>
 </head>
 
 <body>
-    <!-- Navigation Bar -->
     <nav class="navbar">
         <div class="nav-container">
             <a href="#" class="nav-brand">
                 ISOTOPER B15
+                <div class="live-indicator">
+                    <div class="live-dot"></div> LIVE
+                </div>
             </a>
             <ul class="nav-menu">
-                <li class="nav-item">
-                    <a href="#" class="nav-link active">
-                        📊 Dashboard
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="gpm.html" class="nav-link">
-                        🌪️ Gaussian Plume Model
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="#sensors" class="nav-link">
-                        📡 Sensors
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="#trends" class="nav-link">
-                        📈 Trends
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="#maps" class="nav-link">
-                        🗺️ Maps
-                    </a>
+                <li class="nav-item"><a href="#sensors" class="nav-link active">Sensors</a></li>
+                <li class="nav-item"><a href="#trends" class="nav-link">Analytics</a></li>
+                <li class="nav-item"><a href="#maps" class="nav-link">Spatial</a></li>
+                <li class="nav-item special-nav-item">
+                    <a href="gpm.html" target="_blank" rel="noopener noreferrer"
+                        class="nav-link special-glow">Initialize Plume Model</a>
                 </li>
             </ul>
             <button class="theme-toggle" onclick="toggleTheme()">
-                <span class="theme-icon">🌙</span>
-                <span class="theme-text">Dark Mode</span>
+                <span class="theme-text" id="themeText">MODE: DARK</span>
             </button>
             <div class="nav-toggle" onclick="toggleMenu()">
-                <span></span>
-                <span></span>
-                <span></span>
+                <span></span><span></span><span></span>
             </div>
         </div>
     </nav>
 
     <div class="container">
-        <h1>Environmental & Radiation Monitoring System</h1>
+        <h1 class="main-title">Environmental & Radiation Monitor</h1>
         <div class="subtitle">
-            ISOTOPER B15 Real-time Dashboard with Spatial Analysis
+            System Telemetry & Spatial Analysis Framework
         </div>
 
         <div id="alertBanner" class="alert-banner"></div>
         <div id="errorMessage" class="error" style="display: none;"></div>
-        <div id="loading" class="loading">⏳ Loading data from sensors...</div>
+        <div id="loading" class="loading">Establishing Handshake with Sensor Array...</div>
 
         <div id="dashboard" style="display: none;">
 
             <div id="sensors" class="section-title">
-                <h1>ISOTOPER B15</h1> Real-Time Sensor Readings
+                Real-Time Sensor Telemetry
             </div>
 
             <div class="grid">
                 <div class="card">
-                    <h2>🌡️ Temperature</h2>
+                    <h2>Ambient Temperature</h2>
                     <div class="metric">
-                        <span class="metric-label">Current</span>
+                        <span class="metric-label">Current Node</span>
                         <span class="metric-value" id="temp">--</span>
                     </div>
                     <div class="status-badge" id="temp-status">--</div>
                 </div>
 
                 <div class="card">
-                    <h2>💧 Humidity</h2>
+                    <h2>Relative Humidity</h2>
                     <div class="metric">
-                        <span class="metric-label">Current</span>
+                        <span class="metric-label">Current Node</span>
                         <span class="metric-value" id="humidity">--</span>
                     </div>
                     <div class="status-badge" id="humidity-status">--</div>
                 </div>
 
                 <div class="card">
-                    <h2>💨 Hydrogen Gas (MQ8)</h2>
+                    <h2>Hydrogen Gas [MQ-8]</h2>
                     <div class="metric">
-                        <span class="metric-label">Analog Raw (ADC)</span>
+                        <span class="metric-label">Raw ADC Quantized</span>
                         <span class="metric-value" id="h2-raw">--</span>
                     </div>
                     <div class="metric">
-                        <span class="metric-label">Voltage</span>
+                        <span class="metric-label">Bus Voltage</span>
                         <span class="metric-value" id="h2-voltage">--</span>
                     </div>
                     <div class="metric">
-                        <span class="metric-label">Air Quality</span>
+                        <span class="metric-label">Air Quality Index</span>
                         <span class="metric-value" id="h2-do">--</span>
                     </div>
                     <div class="status-badge" id="h2-status">--</div>
@@ -649,109 +1051,80 @@
 
             <div class="grid">
                 <div class="card">
-                    <h2>☢️ Radiation Level</h2>
+                    <h2>Radiation Dosimetry</h2>
                     <div class="metric">
                         <span class="metric-label">Effective Dose Rate</span>
                         <span class="metric-value" id="dose">--</span>
                     </div>
                     <div class="metric">
-                        <span class="metric-label">CPM</span>
+                        <span class="metric-label">Counts / Min (CPM)</span>
                         <span class="metric-value" id="cpm">--</span>
                     </div>
                     <div class="status-badge" id="rad-status">--</div>
                 </div>
 
                 <div class="card">
-                    <h2>📊 Radiation Stats</h2>
+                    <h2>Detector Analytics</h2>
                     <div class="metric">
-                        <span class="metric-label">CPS</span>
+                        <span class="metric-label">Counts / Sec (CPS)</span>
                         <span class="metric-value" id="cps">--</span>
                     </div>
                     <div class="metric">
-                        <span class="metric-label">Status</span>
-                        <span class="metric-value" id="rad-text">--</span>
+                        <span class="metric-label">Detector State</span>
+                        <span class="metric-value" id="rad-text" style="font-size: 1.1rem;">--</span>
                     </div>
                 </div>
             </div>
 
             <div class="section-divider"></div>
-            <div id="trends" class="section-title">Historical Trends</div>
+            <div id="trends" class="section-title">Historical Matrices</div>
 
             <div class="grid">
                 <div class="chart-container">
-                    <h2>📈 Radiation Dose Trend (Last 100 Readings)</h2>
+                    <h2>Radiation Dose Vector (N=100)</h2>
                     <canvas id="doseChart"></canvas>
                 </div>
 
                 <div class="chart-container">
-                    <h2>📈 Temperature & Humidity Trend</h2>
+                    <h2>Atmospheric Drift</h2>
                     <canvas id="envChart"></canvas>
                 </div>
             </div>
 
             <div class="section-divider"></div>
-
-            <!-- Gaussian Plume Model Card -->
-            <div class="grid">
-                <div class="card"
-                    style="grid-column: 1 / -1; max-width: 850px; margin: 0 auto; width: 100%; text-align: center; background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%); border: 2px solid rgba(102, 126, 234, 0.3);">
-                    <h2>🌪️ Gaussian Plume Dispersion Model</h2>
-                    <p class="plume-description">
-                        Advanced atmospheric dispersion modeling with real-time weather integration.<br>
-                        Visualize pollution plumes, concentration fields, and environmental impact analysis.
-                    </p>
-                    <div
-                        style="display: flex; gap: 15px; justify-content: center; align-items: center; flex-wrap: wrap;">
-                        <div class="plume-features">
-                            ✅ Real-time Weather Data &nbsp;&nbsp;
-                            ✅ 3D Concentration Fields &nbsp;&nbsp;
-                            ✅ Interactive Mapping
-                        </div>
-                    </div>
-                    <a href="gpm.html"
-                        style="display: inline-block; margin-top: 15px; padding: 12px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; border-radius: 25px; font-weight: bold; transition: all 0.3s ease; box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);"
-                        onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 25px rgba(102, 126, 234, 0.6)'"
-                        onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 5px 15px rgba(102, 126, 234, 0.4)'">
-                        🚀 Launch Plume Model
-                    </a>
-                </div>
-            </div>
-
-            <div class="section-divider"></div>
-            <div id="maps" class="section-title">Radiation Dispersion - Spatial Analysis</div>
+            <div id="maps" class="section-title">Spatial Analytics</div>
 
             <div class="grid">
                 <div class="map-container">
-                    <h2>🗺️ Interactive Radiation Maps</h2>
+                    <h2>Geospatial Radiation Index</h2>
 
                     <div class="tab-buttons">
                         <button class="tab-button active" onclick="switchMapTab('both')">
-                            📊 Both Maps (Side-by-Side)
+                            Split View Matrix
                         </button>
                         <button class="tab-button" onclick="switchMapTab('interpolated')">
-                            🌐 Interpolated Dispersion Map
+                            Interpolated Field
                         </button>
                         <button class="tab-button" onclick="switchMapTab('measurement')">
-                            📍 Measurement Points Map
+                            Discrete Nodes
                         </button>
                     </div>
 
                     <div id="tab-both" class="tab-content active">
                         <div class="map-info-box">
-                            <h3>📍 Viewing Both Maps</h3>
-                            <p><strong>Left:</strong> Interpolated radiation field (400+ data points)</p>
-                            <p><strong>Right:</strong> Specific measurement points with GPS coordinates</p>
+                            <h3>Dual Canvas Mode</h3>
+                            <p><strong>Alpha:</strong> Continuous radiation field derivation (N > 400)</p>
+                            <p><strong>Beta:</strong> Absolute geospatial measurement nodes</p>
                         </div>
 
                         <div class="map-grid">
                             <div class="map-card">
-                                <h3>🌐 Interpolated Dispersion</h3>
+                                <h3>Interpolated Distribution</h3>
                                 <iframe class="map-iframe" src="radiation_dispersion_map.html"
                                     title="Interpolated Radiation Map" loading="lazy"></iframe>
                             </div>
-
                             <div class="map-card">
-                                <h3>📍 Measurement Points</h3>
+                                <h3>Measurement Nodes</h3>
                                 <iframe class="map-iframe" src="radiation_map_light.html" title="Measurement Points Map"
                                     loading="lazy"></iframe>
                             </div>
@@ -760,56 +1133,94 @@
 
                     <div id="tab-interpolated" class="tab-content">
                         <div class="map-info-box">
-                            <h3>🌐 Interpolated Radiation Dispersion Map</h3>
-                            <p>Linear interpolation from 400+ data points showing radiation distribution patterns.</p>
-                            <p><strong>Features:</strong> Heatmap • Risk contours • Statistical analysis</p>
+                            <h3>Interpolated Distribution Matrix</h3>
+                            <p>Algorithmic expansion of discrete points to predict macro-area exposure.</p>
                         </div>
-
-                        <div class="map-description">
-                            <strong>🔍 How to Use:</strong><br>
-                            • <strong>Zoom/Pan:</strong> Mouse wheel + drag<br>
-                            • <strong>Layers:</strong> Toggle views in top-right control<br>
-                            • <strong>Contours:</strong> Enable "Contour Lines" to see risk zones<br>
-                            • <strong>Statistics:</strong> View stats panel on top-right
-                        </div>
-
                         <iframe class="single-map-iframe" src="radiation_dispersion_map.html" title="Interpolated Map"
                             loading="lazy"></iframe>
                     </div>
 
                     <div id="tab-measurement" class="tab-content">
                         <div class="map-info-box">
-                            <h3>📍 Radiation Measurement Points</h3>
-                            <p>GPS-tagged measurement locations with detailed risk assessments.</p>
-                            <p><strong>Features:</strong> Precise coordinates • Risk zones • Safety calculations</p>
+                            <h3>Absolute Node Cartography</h3>
+                            <p>Direct plot of UAV intercepted radiation metrics with exact coordinate locks.</p>
                         </div>
-
-                        <div class="map-description">
-                            <strong>🔍 How to Use:</strong><br>
-                            • <strong>Click Markers:</strong> View detailed radiation data<br>
-                            • <strong>Risk Zones:</strong> Toggle layer to see affected areas<br>
-                            • <strong>Map Styles:</strong> Switch between Light, Satellite, Street views
-                        </div>
-
                         <iframe class="single-map-iframe" src="radiation_map_light.html" title="Measurement Map"
                             loading="lazy"></iframe>
                     </div>
 
-                    <div class="map-description" style="margin-top: 15px; font-size: 0.85em; color: #888;">
-                        <strong>⚠️ Note:</strong> Ensure both map HTML files are in the same directory as this
-                        dashboard.
+                    <div class="map-description" style="margin-top: 15px; font-size: 0.85rem;">
+                        <strong>SYSTEM NOTE:</strong> HTML canvas dependencies must be located within the root executing
+                        directory.
                     </div>
+                </div>
+            </div>
+
+            <div class="section-divider"></div>
+            <div id="dispersion" class="section-title">Dispersion Engine</div>
+
+            <div class="grid">
+                <div class="card plume-action-card">
+                    <h2>Gaussian Dispersion Protocol</h2>
+                    <p class="plume-description">
+                        Advanced atmospheric dispersion modeling cross-linked with active meteorological APIs. Execute
+                        routine to visualize concentration fields, plume trajectories, and spatial environmental
+                        degradation.
+                    </p>
+                    <div class="plume-features">
+                        <span>[METEOROLOGY: SYNCED]</span>
+                        <span>[3D FIELDS: ACTIVE]</span>
+                        <span>[MAPPING: DYNAMIC]</span>
+                    </div>
+                    <a href="gpm.html" class="btn-launch" target="_blank" rel="noopener noreferrer">
+                        Initialize Plume Model
+                    </a>
                 </div>
             </div>
 
         </div>
 
         <div class="last-update">
-            <div>Environmental Sensors: <span id="envUpdate">--</span></div>
-            <div>Radiation Sensor: <span id="radUpdate">--</span></div>
+            <div>Atmospheric Sync: <span id="envUpdate">--</span></div>
+            <div>Geiger Sync: <span id="radUpdate">--</span></div>
         </div>
     </div>
+
     <script>
+        // ===== SCROLL LOGIC FOR MORPHING NAVBAR & SCROLLSPY =====
+        window.addEventListener('scroll', () => {
+
+            // 1. Morphing Navbar Logic
+            const navbar = document.querySelector('.navbar');
+            if (window.scrollY > 80) {
+                navbar.classList.add('scrolled');
+                document.body.classList.add('nav-is-scrolled');
+            } else {
+                navbar.classList.remove('scrolled');
+                document.body.classList.remove('nav-is-scrolled');
+            }
+
+            // 2. Active Link Scrollspy Logic
+            const sections = document.querySelectorAll('#sensors, #trends, #maps, #dispersion');
+            let current = '#sensors'; // Default to Sensors
+
+            sections.forEach(section => {
+                const rect = section.getBoundingClientRect();
+                // If the section hits the top 250px of the viewport, count it as active
+                if (rect.top <= 250) {
+                    current = '#' + section.id;
+                }
+            });
+
+            // Loop through nav links and apply the active class dynamically
+            document.querySelectorAll('.nav-link[href^="#"]').forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === current) {
+                    link.classList.add('active');
+                }
+            });
+        });
+
         // ===== CONFIGURATION =====
         const GM_TUBE_API = 'https://script.google.com/macros/s/AKfycbzCBRfLEIenGJcOjMiCfhb3aIdF_kop9LOhxdMUeVzn__Sl10te8O-uQcWIacMrw4WpWw/exec';
         const ENV_SENSOR_API = 'https://script.google.com/macros/s/AKfycbyp0PaEELfInYzXKDQxFC5oCGqDaUvf9LptF224IkEq3BBQpCXFol5jRGmjsADJvY50/exec';
@@ -842,7 +1253,7 @@
                 return data;
             } catch (error) {
                 console.error('Error fetching environmental data:', error);
-                showError('Failed to load environmental sensor data');
+                showError('ATMOSPHERIC NODE UNREACHABLE');
                 return null;
             }
         }
@@ -855,14 +1266,14 @@
                 return data;
             } catch (error) {
                 console.error('Error fetching radiation data:', error);
-                showError('Failed to load radiation sensor data');
+                showError('GEIGER NODE UNREACHABLE');
                 return null;
             }
         }
 
         function showError(message) {
             const errorEl = document.getElementById('errorMessage');
-            errorEl.textContent = '⚠️ ' + message;
+            errorEl.textContent = '[FAULT] ' + message;
             errorEl.style.display = 'block';
             setTimeout(() => errorEl.style.display = 'none', 10000);
         }
@@ -886,43 +1297,44 @@
 
                 const h2Status = document.getElementById('h2-status');
                 if (env.h2_do == 1) {
-                    h2Status.textContent = '✅ Clean Air';
+                    h2Status.textContent = 'SYS. NOMINAL';
                     h2Status.className = 'status-badge safe';
                 } else {
-                    h2Status.textContent = '🚨 H₂ Detected!';
+                    h2Status.textContent = 'CONTAMINATION DETECTED';
                     h2Status.className = 'status-badge danger';
-                    showAlert('Hydrogen gas detected!');
+                    showAlert('HYDROGEN GAS CONCENTRATION EXCEEDS TOLERANCE');
                 }
 
-                document.getElementById('envUpdate').textContent = new Date(env.timestamp).toLocaleString();
+                document.getElementById('envUpdate').textContent = new Date(env.timestamp).toLocaleTimeString();
                 updateEnvChart(envData.history);
             }
 
             if (radData && radData.latest) {
                 const rad = radData.latest;
-                document.getElementById('dose').textContent = rad.dose + ' µSv/h';
+                document.getElementById('dose').textContent = rad.dose.toFixed(3) + ' µSv/h';
                 document.getElementById('cpm').textContent = rad.cpm;
                 document.getElementById('cps').textContent = rad.cps;
-                document.getElementById('rad-text').textContent = rad.status;
+
+                document.getElementById('rad-text').textContent = rad.status.replace(/[\u{1F300}-\u{1F9FF}]/gu, '').trim();
 
                 const radStatus = document.getElementById('rad-status');
                 if (rad.dose < THRESHOLDS.dose.safe) {
-                    radStatus.textContent = '✅ Normal';
+                    radStatus.textContent = 'SYS. NOMINAL';
                     radStatus.className = 'status-badge safe';
                 } else if (rad.dose < THRESHOLDS.dose.elevated) {
-                    radStatus.textContent = '⚠️ Elevated';
+                    radStatus.textContent = 'ELEVATED LEVEL';
                     radStatus.className = 'status-badge warning';
                 } else if (rad.dose < THRESHOLDS.dose.high) {
-                    radStatus.textContent = '⚠️ High';
+                    radStatus.textContent = 'WARNING';
                     radStatus.className = 'status-badge warning';
-                    showAlert('High radiation detected!');
+                    showAlert('RADIATION LEVELS EXCEED NOMINAL PARAMETERS');
                 } else {
-                    radStatus.textContent = '🚨 DANGER';
+                    radStatus.textContent = 'CRITICAL ALERT';
                     radStatus.className = 'status-badge danger';
-                    showAlert('DANGEROUS radiation levels!');
+                    showAlert('CRITICAL RADIATION EXPOSURE DETECTED');
                 }
 
-                document.getElementById('radUpdate').textContent = new Date(rad.timestamp).toLocaleString();
+                document.getElementById('radUpdate').textContent = new Date(rad.timestamp).toLocaleTimeString();
                 updateDoseChart(radData.history);
             }
         }
@@ -930,17 +1342,17 @@
         function updateStatus(elementId, value, min, max) {
             const element = document.getElementById(elementId);
             if (value < min || value > max) {
-                element.textContent = '⚠️ Out of Range';
+                element.textContent = 'DEVIATION DETECTED';
                 element.className = 'status-badge warning';
             } else {
-                element.textContent = '✅ Normal';
+                element.textContent = 'SYS. NOMINAL';
                 element.className = 'status-badge safe';
             }
         }
 
         function showAlert(message) {
             const banner = document.getElementById('alertBanner');
-            banner.textContent = '⚠️ ' + message;
+            banner.textContent = '[CRITICAL ALERT] ' + message;
             banner.style.display = 'block';
             setTimeout(() => banner.style.display = 'none', 10000);
         }
@@ -951,10 +1363,9 @@
             const timestamps = history.map(row => new Date(row.timestamp).toLocaleTimeString());
             const doses = history.map(row => row.dose);
 
-            // Determine correct colors based on current theme
             const isDark = currentTheme === 'dark';
-            const textColor = isDark ? '#fff' : '#1a202c';
-            const gridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
+            const textColor = isDark ? '#E5E7EB' : '#0F172A';
+            const gridColor = isDark ? 'rgba(243,244,246,0.1)' : 'rgba(15,23,42,0.1)';
 
             if (doseChart) doseChart.destroy();
             const doseCtx = document.getElementById('doseChart').getContext('2d');
@@ -965,12 +1376,13 @@
                     datasets: [{
                         label: 'Dose Rate (µSv/h)',
                         data: doses,
-                        borderColor: '#ff6384',
-                        backgroundColor: 'rgba(255, 99, 132, 0.1)',
-                        tension: 0.4,
+                        borderColor: '#DC2626',
+                        backgroundColor: 'rgba(220, 38, 38, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.2,
                         fill: true,
-                        pointRadius: 2,
-                        pointHoverRadius: 5
+                        pointRadius: 1,
+                        pointHoverRadius: 4
                     }]
                 },
                 options: {
@@ -982,15 +1394,15 @@
                             position: 'top',
                             labels: {
                                 color: textColor,
-                                font: { family: "'Inter', sans-serif", size: 13, weight: '500' },
+                                font: { family: "'Geist Mono', monospace", size: 11 },
                                 usePointStyle: true,
                                 padding: 20
                             }
                         }
                     },
                     scales: {
-                        x: { ticks: { color: textColor }, grid: { color: gridColor } },
-                        y: { ticks: { color: textColor }, grid: { color: gridColor } }
+                        x: { ticks: { color: textColor, font: { family: "'Geist Mono', monospace", size: 10 } }, grid: { color: gridColor } },
+                        y: { ticks: { color: textColor, font: { family: "'Geist Mono', monospace", size: 10 } }, grid: { color: gridColor } }
                     }
                 }
             });
@@ -1002,10 +1414,9 @@
             const temps = history.map(row => row.temperature);
             const humidities = history.map(row => row.humidity);
 
-            // Determine correct colors based on current theme
             const isDark = currentTheme === 'dark';
-            const textColor = isDark ? '#fff' : '#1a202c';
-            const gridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
+            const textColor = isDark ? '#E5E7EB' : '#0F172A';
+            const gridColor = isDark ? 'rgba(243,244,246,0.1)' : 'rgba(15,23,42,0.1)';
 
             if (envChart) envChart.destroy();
             const envCtx = document.getElementById('envChart').getContext('2d');
@@ -1015,24 +1426,26 @@
                     labels: timestamps,
                     datasets: [
                         {
-                            label: 'Temperature (°C)',
+                            label: 'Temp (°C)',
                             data: temps,
-                            borderColor: '#36a2eb',
-                            backgroundColor: 'rgba(54, 162, 235, 0.1)',
-                            tension: 0.4,
+                            borderColor: '#2563EB',
+                            backgroundColor: 'transparent',
+                            borderWidth: 2,
+                            tension: 0.2,
                             yAxisID: 'y',
-                            pointRadius: 2,
-                            pointHoverRadius: 5
+                            pointRadius: 1,
+                            pointHoverRadius: 4
                         },
                         {
                             label: 'Humidity (%)',
                             data: humidities,
-                            borderColor: '#4bc0c0',
-                            backgroundColor: 'rgba(75, 192, 192, 0.1)',
-                            tension: 0.4,
+                            borderColor: '#059669',
+                            backgroundColor: 'transparent',
+                            borderWidth: 2,
+                            tension: 0.2,
                             yAxisID: 'y1',
-                            pointRadius: 2,
-                            pointHoverRadius: 5
+                            pointRadius: 1,
+                            pointHoverRadius: 4
                         }
                     ]
                 },
@@ -1045,24 +1458,24 @@
                             position: 'top',
                             labels: {
                                 color: textColor,
-                                font: { family: "'Inter', sans-serif", size: 13, weight: '500' },
+                                font: { family: "'Geist Mono', monospace", size: 11 },
                                 usePointStyle: true,
                                 padding: 20
                             }
                         }
                     },
                     scales: {
-                        x: { ticks: { color: textColor }, grid: { color: gridColor } },
+                        x: { ticks: { color: textColor, font: { family: "'Geist Mono', monospace", size: 10 } }, grid: { color: gridColor } },
                         y: {
                             type: 'linear',
                             position: 'left',
-                            ticks: { color: textColor },
+                            ticks: { color: textColor, font: { family: "'Geist Mono', monospace", size: 10 } },
                             grid: { color: gridColor }
                         },
                         y1: {
                             type: 'linear',
                             position: 'right',
-                            ticks: { color: textColor },
+                            ticks: { color: textColor, font: { family: "'Geist Mono', monospace", size: 10 } },
                             grid: { display: false }
                         }
                     }
@@ -1078,7 +1491,6 @@
         }
 
         async function init() {
-            // Initialize theme on page load
             initTheme();
             await fetchAllData();
         }
@@ -1092,27 +1504,17 @@
         }
 
         // ===== THEME TOGGLE =====
-        let currentTheme = localStorage.getItem('theme') || 'light';
+        let currentTheme = localStorage.getItem('theme') || 'dark';
 
         function toggleTheme() {
             currentTheme = currentTheme === 'light' ? 'dark' : 'light';
             document.documentElement.setAttribute('data-theme', currentTheme);
 
-            const themeIcon = document.querySelector('.theme-icon');
-            const themeText = document.querySelector('.theme-text');
+            const themeText = document.getElementById('themeText');
+            themeText.textContent = currentTheme === 'dark' ? 'MODE: LIGHT' : 'MODE: DARK';
 
-            if (currentTheme === 'dark') {
-                themeIcon.textContent = '☀️';
-                themeText.textContent = 'Light Mode';
-            } else {
-                themeIcon.textContent = '🌙';
-                themeText.textContent = 'Dark Mode';
-            }
-
-            // Save preference
             localStorage.setItem('theme', currentTheme);
 
-            // Update chart colors
             if (doseChart || envChart) {
                 updateChartsForTheme();
             }
@@ -1120,23 +1522,14 @@
 
         function initTheme() {
             document.documentElement.setAttribute('data-theme', currentTheme);
-
-            const themeIcon = document.querySelector('.theme-icon');
-            const themeText = document.querySelector('.theme-text');
-
-            if (currentTheme === 'dark') {
-                themeIcon.textContent = '☀️';
-                themeText.textContent = 'Light Mode';
-            } else {
-                themeIcon.textContent = '🌙';
-                themeText.textContent = 'Dark Mode';
-            }
+            const themeText = document.getElementById('themeText');
+            themeText.textContent = currentTheme === 'dark' ? 'MODE: LIGHT' : 'MODE: DARK';
         }
 
         function updateChartsForTheme() {
             const isDark = currentTheme === 'dark';
-            const textColor = isDark ? '#fff' : '#1a202c';
-            const gridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
+            const textColor = isDark ? '#E5E7EB' : '#0F172A';
+            const gridColor = isDark ? 'rgba(243,244,246,0.1)' : 'rgba(15,23,42,0.1)';
 
             if (doseChart) {
                 doseChart.options.plugins.legend.labels.color = textColor;
@@ -1158,7 +1551,6 @@
             }
         }
 
-        // Smooth scrolling for anchor links
         document.querySelectorAll('a[href^="#"]').forEach(anchor => {
             anchor.addEventListener('click', function (e) {
                 if (this.getAttribute('href') !== '#') {
@@ -1166,9 +1558,10 @@
                     const targetId = this.getAttribute('href');
                     const targetSection = document.querySelector(targetId);
                     if (targetSection) {
-                        targetSection.scrollIntoView({
-                            behavior: 'smooth'
-                        });
+                        targetSection.scrollIntoView({ behavior: 'smooth' });
+                        if (window.innerWidth <= 900) {
+                            toggleMenu(); // Close mobile menu on click
+                        }
                     }
                 }
             });

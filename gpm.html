@@ -1,13 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ISOTOPER B15 · Gaussian Plume · MQ-8 · Dhaka</title>
     <style>
-        /* required styles */
-
+        /* Leaflet required styles - Core Map Architecture */
         .leaflet-pane,
         .leaflet-tile,
         .leaflet-marker-icon,
@@ -36,21 +35,19 @@
             -webkit-user-drag: none;
         }
 
-        /* Prevents IE11 from highlighting tiles in blue */
         .leaflet-tile::selection {
             background: transparent;
         }
 
-        /* Safari renders non-retina tile on retina better with this, but Chrome is worse */
         .leaflet-safari .leaflet-tile {
             image-rendering: -webkit-optimize-contrast;
         }
 
-        /* hack that prevents hw layers "stretching" when loading new tiles */
         .leaflet-safari .leaflet-tile-container {
             width: 1600px;
             height: 1600px;
             -webkit-transform-origin: 0 0;
+            transform-origin: 0 0;
         }
 
         .leaflet-marker-icon,
@@ -58,8 +55,6 @@
             display: block;
         }
 
-        /* .leaflet-container svg: reset svg max-width decleration shipped in Joomla! (joomla.org) 3.x */
-        /* .leaflet-container img: map is broken in FF if you have max-width: 100% on tiles */
         .leaflet-container .leaflet-overlay-pane svg {
             max-width: none !important;
             max-height: none !important;
@@ -77,7 +72,6 @@
         }
 
         .leaflet-container img.leaflet-tile {
-            /* See: https://bugs.chromium.org/p/chromium/issues/detail?id=600120 */
             mix-blend-mode: plus-lighter;
         }
 
@@ -88,7 +82,6 @@
 
         .leaflet-container.leaflet-touch-drag {
             -ms-touch-action: pinch-zoom;
-            /* Fallback for FF which doesn't support pinch-zoom */
             touch-action: none;
             touch-action: pinch-zoom;
         }
@@ -123,9 +116,9 @@
             z-index: 800;
         }
 
-        /* workaround for https://bugzilla.mozilla.org/show_bug.cgi?id=888319 */
         .leaflet-overlay-pane svg {
             -moz-user-select: none;
+            user-select: none;
         }
 
         .leaflet-pane {
@@ -164,25 +157,9 @@
             z-index: 200;
         }
 
-        .leaflet-vml-shape {
-            width: 1px;
-            height: 1px;
-        }
-
-        .lvml {
-            behavior: url(#default#VML);
-            display: inline-block;
-            position: absolute;
-        }
-
-
-        /* control positioning */
-
         .leaflet-control {
             position: relative;
             z-index: 800;
-            pointer-events: visiblePainted;
-            /* IE 9-10 doesn't have auto */
             pointer-events: auto;
         }
 
@@ -234,13 +211,8 @@
             margin-right: 10px;
         }
 
-
-        /* zoom and fade animations */
-
         .leaflet-fade-anim .leaflet-popup {
             opacity: 0;
-            -webkit-transition: opacity 0.2s linear;
-            -moz-transition: opacity 0.2s linear;
             transition: opacity 0.2s linear;
         }
 
@@ -249,8 +221,6 @@
         }
 
         .leaflet-zoom-animated {
-            -webkit-transform-origin: 0 0;
-            -ms-transform-origin: 0 0;
             transform-origin: 0 0;
         }
 
@@ -259,15 +229,11 @@
         }
 
         .leaflet-zoom-anim .leaflet-zoom-animated {
-            -webkit-transition: -webkit-transform 0.25s cubic-bezier(0, 0, 0.25, 1);
-            -moz-transition: -moz-transform 0.25s cubic-bezier(0, 0, 0.25, 1);
             transition: transform 0.25s cubic-bezier(0, 0, 0.25, 1);
         }
 
         .leaflet-zoom-anim .leaflet-tile,
         .leaflet-pan-anim .leaflet-tile {
-            -webkit-transition: none;
-            -moz-transition: none;
             transition: none;
         }
 
@@ -275,16 +241,11 @@
             visibility: hidden;
         }
 
-
-        /* cursors */
-
         .leaflet-interactive {
             cursor: pointer;
         }
 
         .leaflet-grab {
-            cursor: -webkit-grab;
-            cursor: -moz-grab;
             cursor: grab;
         }
 
@@ -301,13 +262,9 @@
         .leaflet-dragging .leaflet-grab,
         .leaflet-dragging .leaflet-grab .leaflet-interactive,
         .leaflet-dragging .leaflet-marker-draggable {
-            cursor: move;
-            cursor: -webkit-grabbing;
-            cursor: -moz-grabbing;
             cursor: grabbing;
         }
 
-        /* marker & overlays interactivity */
         .leaflet-marker-icon,
         .leaflet-marker-shadow,
         .leaflet-image-layer,
@@ -320,922 +277,568 @@
         .leaflet-image-layer.leaflet-interactive,
         .leaflet-pane>svg path.leaflet-interactive,
         svg.leaflet-image-layer.leaflet-interactive path {
-            pointer-events: visiblePainted;
-            /* IE 9-10 doesn't have auto */
             pointer-events: auto;
-        }
-
-        /* visual tweaks */
-
-        .leaflet-container {
-            background: #ddd;
-            outline-offset: 1px;
-        }
-
-        .leaflet-container a {
-            color: #0078A8;
-        }
-
-        .leaflet-zoom-box {
-            border: 2px dotted #38f;
-            background: rgba(255, 255, 255, 0.5);
-        }
-
-
-        /* general typography */
-        .leaflet-container {
-            font-family: "Helvetica Neue", Arial, Helvetica, sans-serif;
-            font-size: 12px;
-            font-size: 0.75rem;
-            line-height: 1.5;
-        }
-
-
-        /* general toolbar styles */
-
-        .leaflet-bar {
-            box-shadow: 0 1px 5px rgba(0, 0, 0, 0.65);
-            border-radius: 4px;
-        }
-
-        .leaflet-bar a {
-            background-color: #fff;
-            border-bottom: 1px solid #ccc;
-            width: 26px;
-            height: 26px;
-            line-height: 26px;
-            display: block;
-            text-align: center;
-            text-decoration: none;
-            color: black;
-        }
-
-        .leaflet-bar a,
-        .leaflet-control-layers-toggle {
-            background-position: 50% 50%;
-            background-repeat: no-repeat;
-            display: block;
-        }
-
-        .leaflet-bar a:hover,
-        .leaflet-bar a:focus {
-            background-color: #f4f4f4;
-        }
-
-        .leaflet-bar a:first-child {
-            border-top-left-radius: 4px;
-            border-top-right-radius: 4px;
-        }
-
-        .leaflet-bar a:last-child {
-            border-bottom-left-radius: 4px;
-            border-bottom-right-radius: 4px;
-            border-bottom: none;
-        }
-
-        .leaflet-bar a.leaflet-disabled {
-            cursor: default;
-            background-color: #f4f4f4;
-            color: #bbb;
-        }
-
-        .leaflet-touch .leaflet-bar a {
-            width: 30px;
-            height: 30px;
-            line-height: 30px;
-        }
-
-        .leaflet-touch .leaflet-bar a:first-child {
-            border-top-left-radius: 2px;
-            border-top-right-radius: 2px;
-        }
-
-        .leaflet-touch .leaflet-bar a:last-child {
-            border-bottom-left-radius: 2px;
-            border-bottom-right-radius: 2px;
-        }
-
-        /* zoom control */
-
-        .leaflet-control-zoom-in,
-        .leaflet-control-zoom-out {
-            font: bold 18px 'Lucida Console', Monaco, monospace;
-            text-indent: 1px;
-        }
-
-        .leaflet-touch .leaflet-control-zoom-in,
-        .leaflet-touch .leaflet-control-zoom-out {
-            font-size: 22px;
-        }
-
-
-        /* layers control */
-
-        .leaflet-control-layers {
-            box-shadow: 0 1px 5px rgba(0, 0, 0, 0.4);
-            background: #fff;
-            border-radius: 5px;
-        }
-
-        .leaflet-control-layers-toggle {
-            background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABoAAAAaCAQAAAADQ4RFAAACf0lEQVR4AY1UM3gkARTePdvdoTxXKc+qTl3aU5U6b2Kbkz3Gtq3Zw6ziLGNPzrYx7946Tr6/ee/XeCQ4D3ykPtL5tHno4n0d/h3+xfuWHGLX81cn7r0iTNzjr7LrlxCqPtkbTQEHeqOrTy4Yyt3VCi/IOB0v7rVC7q45Q3Gr5K6jt+3Gl5nCoDD4MtO+j96Wu8atmhGqcNGHObuf8OM/x3AMx38+4Z2sPqzCxRFK2aF2e5Jol56XTLyggAMTL56XOMoS1W4pOyjUcGGQdZxU6qRh7B9Zp+PfpOFlqt0zyDZckPi1ttmIp03jX8gyJ8a/PG2yutpS/Vol7peZIbZcKBAEEheEIAgFbDkz5H6Zrkm2hVWGiXKiF4Ycw0RWKdtC16Q7qe3X4iOMxruonzegJzWaXFrU9utOSsLUmrc0YjeWYjCW4PDMADElpJSSQ0vQvA1Tm6/JlKnqFs1EGyZiFCqnRZTEJJJiKRYzVYzJck2Rm6P4iH+cmSY0YzimYa8l0EtTODFWhcMIMVqdsI2uiTvKmTisIDHJ3od5GILVhBCarCfVRmo4uTjkhrhzkiBV7SsaqS+TzrzM1qpGGUFt28pIySQHR6h7F6KSwGWm97ay+Z+ZqMcEjEWebE7wxCSQwpkhJqoZA5ivCdZDjJepuJ9IQjGGUmuXJdBFUygxVqVsxFsLMbDe8ZbDYVCGKxs+W080max1hFCarCfV+C1KATwcnvE9gRRuMP2prdbWGowm1KB1y+zwMMENkM755cJ2yPDtqhTI6ED1M/82yIDtC/4j4BijjeObflpO9I9MwXTCsSX8jWAFeHr05WoLTJ5G8IQVS/7vwR6ohirYM7f6HzYpogfS3R2OAAAAAElFTkSuQmCC);
-            width: 36px;
-            height: 36px;
-        }
-
-        .leaflet-retina .leaflet-control-layers-toggle {
-            background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADQAAAA0CAQAAABvcdNgAAAEsklEQVR4AWL4TydIhpZK1kpWOlg0w3ZXP6D2soBtG42jeI6ZmQTHzAxiTbSJsYLjO9HhP+WOmcuhciVnmHVQcJnp7DFvScowZorad/+V/fVzMdMT2g9Cv9guXGv/7pYOrXh2U+RRR3dSd9JRx6bIFc/ekqHI29JC6pJ5ZEh1yWkhkbcFeSjxgx3L2m1cb1C7bceyxA+CNjT/Ifff+/kDk2u/w/33/IeCMOSaWZ4glosqT3DNnNZQ7Cs58/3Ce5HL78iZH/vKVIaYlqzfdLu8Vi7dnvUbEza5Idt36tquZFldl6N5Z/POLof0XLK61mZCmJSWjVF9tEjUluu74IUXvgttuVIHE7YxSkaYhJZam7yiM9Pv82JYfl9nptxZaxMJE4YSPty+vF0+Y2up9d3wwijfjZbabqm/3bZ9ecKHsiGmRflnn1MW4pjHf9oLufyn2z3y1D6n8g8TZhxyzipLNPnAUpsOiuWimg52psrTZYnOWYNDTMuWBWa0tJb4rgq1UvmutpaYEbZlwU3CLJm/ayYjHW5/h7xWLn9Hh1vepDkyf7dE7MtT5LR4e7yYpHrkhOUpEfssBLq2pPhAqoSWKUkk7EDqkmK6RrCEzqDjhNDWNE+XSMvkJRDWlZTmCW0l0PHQGRZY5t1L83kT0Y3l2SItk5JAWHl2dCOBm+fPu3fo5/3v61RMCO9Jx2EEYYhb0rmNQMX/vm7gqOEJLcXTGw3CAuRNeyaPWwjR8PRqKQ1PDA/dpv+on9Shox52WFnx0KY8onHayrJzm87i5h9xGw/tfkev0jGsQizqezUKjk12hBMKJ4kbCqGPVNXudyyrShovGw5CgxsRICxF6aRmSjlBnHRzg7Gx8fKqEubI2rahQYdR1YgDIRQO7JvQyD52hoIQx0mxa0ODtW2Iozn1le2iIRdzwWewedyZzewidueOGqlsn1MvcnQpuVwLGG3/IR1hIKxCjelIDZ8ldqWz25jWAsnldEnK0Zxro19TGVb2ffIZEsIO89EIEDvKMPrzmBOQcKQ+rroye6NgRRxqR4U8EAkz0CL6uSGOm6KQCdWjvjRiSP1BPalCRS5iQYiEIvxuBMJEWgzSoHADcVMuN7IuqqTeyUPq22qFimFtxDyBBJEwNyt6TM88blFHao/6tWWhuuOM4SAK4EI4QmFHA+SEyWlp4EQoJ13cYGzMu7yszEIBOm2rVmHUNqwAIQabISNMRstmdhNWcFLsSm+0tjJH1MdRxO5Nx0WDMhCtgD6OKgZeljJqJKc9po8juskR9XN0Y1lZ3mWjLR9JCO1jRDMd0fpYC2VnvjBSEFg7wBENc0R9HFlb0xvF1+TBEpF68d+DHR6IOWVv2BECtxo46hOFUBd/APU57WIoEwJhIi2CdpyZX0m93BZicktMj1AS9dClteUFAUNUIEygRZCtik5zSxI9MubTBH1GOiHsiLJ3OCoSZkILa9PxiN0EbvhsAo8tdAf9Seepd36lGWHmtNANTv5Jd0z4QYyeo/UEJqxKRpg5LZx6btLPsOaEmdMyxYdlc8LMaJnikDlhclqmPiQnTEpLUIZEwkRagjYkEibQErwhkTAKCLQEbUgkzJQWc/0PstHHcfEdQ+UAAAAASUVORK5CYII=);
-            background-size: 26px 26px;
-        }
-
-        .leaflet-touch .leaflet-control-layers-toggle {
-            width: 44px;
-            height: 44px;
-        }
-
-        .leaflet-control-layers .leaflet-control-layers-list,
-        .leaflet-control-layers-expanded .leaflet-control-layers-toggle {
-            display: none;
-        }
-
-        .leaflet-control-layers-expanded .leaflet-control-layers-list {
-            display: block;
-            position: relative;
-        }
-
-        .leaflet-control-layers-expanded {
-            padding: 6px 10px 6px 6px;
-            color: #333;
-            background: #fff;
-        }
-
-        .leaflet-control-layers-scrollbar {
-            overflow-y: scroll;
-            overflow-x: hidden;
-            padding-right: 5px;
-        }
-
-        .leaflet-control-layers-selector {
-            margin-top: 2px;
-            position: relative;
-            top: 1px;
-        }
-
-        .leaflet-control-layers label {
-            display: block;
-            font-size: 13px;
-            font-size: 1.08333em;
-        }
-
-        .leaflet-control-layers-separator {
-            height: 0;
-            border-top: 1px solid #ddd;
-            margin: 5px -10px 5px -6px;
-        }
-
-        /* Default icon URLs */
-        .leaflet-default-icon-path {
-            /* used only in path-guessing heuristic, see L.Icon.Default */
-            background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABkAAAApCAYAAADAk4LOAAAFgUlEQVR4Aa1XA5BjWRTN2oW17d3YaZtr2962HUzbDNpjszW24mRt28p47v7zq/bXZtrp/lWnXr337j3nPCe85NcypgSFdugCpW5YoDAMRaIMqRi6aKq5E3YqDQO3qAwjVWrD8Ncq/RBpykd8oZUb/kaJutow8r1aP9II0WmLKLIsJyv1w/kqw9Ch2MYdB++12Onxee/QMwvf4/Dk/Lfp/i4nxTXtOoQ4pW5Aj7wpici1A9erdAN2OH64x8OSP9j3Ft3b7aWkTg/Fm91siTra0f9on5sQr9INejH6CUUUpavjFNq1B+Oadhxmnfa8RfEmN8VNAsQhPqF55xHkMzz3jSmChWU6f7/XZKNH+9+hBLOHYozuKQPxyMPUKkrX/K0uWnfFaJGS1QPRtZsOPtr3NsW0uyh6NNCOkU3Yz+bXbT3I8G3xE5EXLXtCXbbqwCO9zPQYPRTZ5vIDXD7U+w7rFDEoUUf7ibHIR4y6bLVPXrz8JVZEql13trxwue/uDivd3fkWRbS6/IA2bID4uk0UpF1N8qLlbBlXs4Ee7HLTfV1j54APvODnSfOWBqtKVvjgLKzF5YdEk5ewRkGlK0i33Eofffc7HT56jD7/6U+qH3Cx7SBLNntH5YIPvODnyfIXZYRVDPqgHtLs5ABHD3YzLuespb7t79FY34DjMwrVrcTuwlT55YMPvOBnRrJ4VXTdNnYug5ucHLBjEpt30701A3Ts+HEa73u6dT3FNWwflY86eMHPk+Yu+i6pzUpRrW7SNDg5JHR4KapmM5Wv2E8Tfcb1HoqqHMHU+uWDD7zg54mz5/2BSnizi9T1Dg4QQXLToGNCkb6tb1NU+QAlGr1++eADrzhn/u8Q2YZhQVlZ5+CAOtqfbhmaUCS1ezNFVm2imDbPmPng5wmz+gwh+oHDce0eUtQ6OGDIyR0uUhUsoO3vfDmmgOezH0mZN59x7MBi++WDL1g/eEiU3avlidO671bkLfwbw5XV2P8Pzo0ydy4t2/0eu33xYSOMOD8hTf4CrBtGMSoXfPLchX+J0ruSePw3LZeK0juPJbYzrhkH0io7B3k164hiGvawhOKMLkrQLyVpZg8rHFW7E2uHOL888IBPlNZ1FPzstSJM694fWr6RwpvcJK60+0HCILTBzZLFNdtAzJaohze60T8qBzyh5ZuOg5e7uwQppofEmf2++DYvmySqGBuKaicF1blQjhuHdvCIMvp8whTTfZzI7RldpwtSzL+F1+wkdZ2TBOW2gIF88PBTzD/gpeREAMEbxnJcaJHNHrpzji0gQCS6hdkEeYt9DF/2qPcEC8RM28Hwmr3sdNyht00byAut2k3gufWNtgtOEOFGUwcXWNDbdNbpgBGxEvKkOQsxivJx33iow0Vw5S6SVTrpVq11ysA2Rp7gTfPfktc6zhtXBBC+adRLshf6sG2RfHPZ5EAc4sVZ83yCN00Fk/4kggu40ZTvIEm5g24qtU4KjBrx/BTTH8ifVASAG7gKrnWxJDcU7x8X6Ecczhm3o6YicvsLXWfh3Ch1W0k8x0nXF+0fFxgt4phz8QvypiwCCFKMqXCnqXExjq10beH+UUA7+nG6mdG/Pu0f3LgFcGrl2s0kNNjpmoJ9o4B29CMO8dMT4Q5ox8uitF6fqsrJOr8qnwNbRzv6hSnG5wP+64C7h9lp30hKNtKdWjtdkbuPA19nJ7Tz3zR/ibgARbhb4AlhavcBebmTHcFl2fvYEnW0ox9xMxKBS8btJ+KiEbq9zA4RthQXDhPa0T9TEe69gWupwc6uBUphquXgf+/FrIjweHQS4/pduMe5ERUMHUd9xv8ZR98CxkS4F2n3EUrUZ10EYNw7BWm9x1GiPssi3GgiGRDKWRYZfXlON+dfNbM+GgIwYdwAAAAASUVORK5CYII=);
-        }
-
-
-        /* attribution and scale controls */
-
-        .leaflet-container .leaflet-control-attribution {
-            background: #fff;
-            background: rgba(255, 255, 255, 0.8);
-            margin: 0;
-        }
-
-        .leaflet-control-attribution,
-        .leaflet-control-scale-line {
-            padding: 0 5px;
-            color: #333;
-            line-height: 1.4;
-        }
-
-        .leaflet-control-attribution a {
-            text-decoration: none;
-        }
-
-        .leaflet-control-attribution a:hover,
-        .leaflet-control-attribution a:focus {
-            text-decoration: underline;
-        }
-
-        .leaflet-attribution-flag {
-            display: inline !important;
-            vertical-align: baseline !important;
-            width: 1em;
-            height: 0.6669em;
-        }
-
-        .leaflet-left .leaflet-control-scale {
-            margin-left: 5px;
-        }
-
-        .leaflet-bottom .leaflet-control-scale {
-            margin-bottom: 5px;
-        }
-
-        .leaflet-control-scale-line {
-            border: 2px solid #777;
-            border-top: none;
-            line-height: 1.1;
-            padding: 2px 5px 1px;
-            white-space: nowrap;
-            -moz-box-sizing: border-box;
-            box-sizing: border-box;
-            background: rgba(255, 255, 255, 0.8);
-            text-shadow: 1px 1px #fff;
-        }
-
-        .leaflet-control-scale-line:not(:first-child) {
-            border-top: 2px solid #777;
-            border-bottom: none;
-            margin-top: -2px;
-        }
-
-        .leaflet-control-scale-line:not(:first-child):not(:last-child) {
-            border-bottom: 2px solid #777;
-        }
-
-        .leaflet-touch .leaflet-control-attribution,
-        .leaflet-touch .leaflet-control-layers,
-        .leaflet-touch .leaflet-bar {
-            box-shadow: none;
-        }
-
-        .leaflet-touch .leaflet-control-layers,
-        .leaflet-touch .leaflet-bar {
-            border: 2px solid rgba(0, 0, 0, 0.2);
-            background-clip: padding-box;
-        }
-
-
-        /* popup */
-
-        .leaflet-popup {
-            position: absolute;
-            text-align: center;
-            margin-bottom: 20px;
-        }
-
-        .leaflet-popup-content-wrapper {
-            padding: 1px;
-            text-align: left;
-            border-radius: 12px;
-        }
-
-        .leaflet-popup-content {
-            margin: 13px 24px 13px 20px;
-            line-height: 1.3;
-            font-size: 13px;
-            font-size: 1.08333em;
-            min-height: 1px;
-        }
-
-        .leaflet-popup-content p {
-            margin: 17px 0;
-            margin: 1.3em 0;
-        }
-
-        .leaflet-popup-tip-container {
-            width: 40px;
-            height: 20px;
-            position: absolute;
-            left: 50%;
-            margin-top: -1px;
-            margin-left: -20px;
-            overflow: hidden;
-            pointer-events: none;
-        }
-
-        .leaflet-popup-tip {
-            width: 17px;
-            height: 17px;
-            padding: 1px;
-
-            margin: -10px auto 0;
-            pointer-events: auto;
-
-            -webkit-transform: rotate(45deg);
-            -moz-transform: rotate(45deg);
-            -ms-transform: rotate(45deg);
-            transform: rotate(45deg);
-        }
-
-        .leaflet-popup-content-wrapper,
-        .leaflet-popup-tip {
-            background: white;
-            color: #333;
-            box-shadow: 0 3px 14px rgba(0, 0, 0, 0.4);
-        }
-
-        .leaflet-container a.leaflet-popup-close-button {
-            position: absolute;
-            top: 0;
-            right: 0;
-            border: none;
-            text-align: center;
-            width: 24px;
-            height: 24px;
-            font: 16px/24px Tahoma, Verdana, sans-serif;
-            color: #757575;
-            text-decoration: none;
-            background: transparent;
-        }
-
-        .leaflet-container a.leaflet-popup-close-button:hover,
-        .leaflet-container a.leaflet-popup-close-button:focus {
-            color: #585858;
-        }
-
-        .leaflet-popup-scrolled {
-            overflow: auto;
-        }
-
-        .leaflet-oldie .leaflet-popup-content-wrapper {
-            -ms-zoom: 1;
-        }
-
-        .leaflet-oldie .leaflet-popup-tip {
-            width: 24px;
-            margin: 0 auto;
-
-            -ms-filter: "progid:DXImageTransform.Microsoft.Matrix(M11=0.70710678, M12=0.70710678, M21=-0.70710678, M22=0.70710678)";
-            filter: progid:DXImageTransform.Microsoft.Matrix(M11=0.70710678, M12=0.70710678, M21=-0.70710678, M22=0.70710678);
-        }
-
-        .leaflet-oldie .leaflet-control-zoom,
-        .leaflet-oldie .leaflet-control-layers,
-        .leaflet-oldie .leaflet-popup-content-wrapper,
-        .leaflet-oldie .leaflet-popup-tip {
-            border: 1px solid #999;
-        }
-
-
-        /* div icon */
-
-        .leaflet-div-icon {
-            background: #fff;
-            border: 1px solid #666;
-        }
-
-
-        /* Tooltip */
-        /* Base styles for the element that has a tooltip */
-        .leaflet-tooltip {
-            position: absolute;
-            padding: 6px;
-            background-color: #fff;
-            border: 1px solid #fff;
-            border-radius: 3px;
-            color: #222;
-            white-space: nowrap;
-            -webkit-user-select: none;
-            -moz-user-select: none;
-            -ms-user-select: none;
-            user-select: none;
-            pointer-events: none;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-        }
-
-        .leaflet-tooltip.leaflet-interactive {
-            cursor: pointer;
-            pointer-events: auto;
-        }
-
-        .leaflet-tooltip-top:before,
-        .leaflet-tooltip-bottom:before,
-        .leaflet-tooltip-left:before,
-        .leaflet-tooltip-right:before {
-            position: absolute;
-            pointer-events: none;
-            border: 6px solid transparent;
-            background: transparent;
-            content: "";
-        }
-
-        /* Directions */
-
-        .leaflet-tooltip-bottom {
-            margin-top: 6px;
-        }
-
-        .leaflet-tooltip-top {
-            margin-top: -6px;
-        }
-
-        .leaflet-tooltip-bottom:before,
-        .leaflet-tooltip-top:before {
-            left: 50%;
-            margin-left: -6px;
-        }
-
-        .leaflet-tooltip-top:before {
-            bottom: 0;
-            margin-bottom: -12px;
-            border-top-color: #fff;
-        }
-
-        .leaflet-tooltip-bottom:before {
-            top: 0;
-            margin-top: -12px;
-            margin-left: -6px;
-            border-bottom-color: #fff;
-        }
-
-        .leaflet-tooltip-left {
-            margin-left: -6px;
-        }
-
-        .leaflet-tooltip-right {
-            margin-left: 6px;
-        }
-
-        .leaflet-tooltip-left:before,
-        .leaflet-tooltip-right:before {
-            top: 50%;
-            margin-top: -6px;
-        }
-
-        .leaflet-tooltip-left:before {
-            right: 0;
-            margin-right: -12px;
-            border-left-color: #fff;
-        }
-
-        .leaflet-tooltip-right:before {
-            left: 0;
-            margin-left: -12px;
-            border-right-color: #fff;
-        }
-
-        /* Printing */
-
-        @media print {
-
-            /* Prevent printers from removing background-images of controls. */
-            .leaflet-control {
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
         }
     </style>
+
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Orbitron:wght@700;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Orbitron:wght@600;800&display=swap');
 
         :root {
-            /* Light theme (default) */
-            --bg: #f8fafc;
-            --panel: #ffffff;
-            --border: #e2e8f0;
-            --accent: #2563eb;
-            --red: #dc2626;
-            --orange: #ea580c;
-            --yellow: #d97706;
-            --green: #059669;
-            --dim: #64748b;
-            --text: #1e293b;
-            --drone: #e11d48;
+            /* Tech-Inspired Light Mode Palette */
+            --bg: #F8F9FA;
+            --panel: #FFFFFF;
+            --panel-card: #F3F4F6;
+            --border: #E5E7EB;
+            --accent: #2563EB;
+            --accent-glow: rgba(37, 99, 235, 0.15);
+            --red: #EF4444;
+            --orange: #F97316;
+            --yellow: #F59E0B;
+            --green: #10B981;
+            --dim: #6B7280;
+            --text: #1E293B;
+            --text-heading: #111827;
+            --drone: #E11D48;
+            --glass: rgba(255, 255, 255, 0.85);
+            --shadow: 0 4px 20px -2px rgba(17, 24, 39, 0.05), 0 2px 8px -1px rgba(17, 24, 39, 0.03);
+            --radius-lg: 12px;
+            --radius-md: 8px;
+            --font-main: 'Plus Jakarta Sans', -apple-system, sans-serif;
         }
 
         [data-theme="dark"] {
-            /* Dark theme */
-            --bg: #0a1628;
-            --panel: #1a2332;
-            --border: #2a3441;
-            --accent: #00d4ff;
-            --red: #ff4757;
-            --orange: #ffa502;
-            --yellow: #ffdd59;
-            --green: #2ed573;
-            --dim: #57708a;
-            --text: #b8c5d1;
-            --drone: #ff6b8a;
+            /* Tech-Inspired Dark Mode Palette */
+            --bg: #121212;
+            --panel: #1F2937;
+            --panel-card: #374151;
+            --border: #4B5563;
+            --accent: #38BDF8;
+            --accent-glow: rgba(56, 189, 248, 0.2);
+            --red: #F87171;
+            --orange: #FB923C;
+            --yellow: #FBBF24;
+            --green: #34D399;
+            --dim: #9CA3AF;
+            --text: #E5E7EB;
+            --text-heading: #F3F4F6;
+            --drone: #FB7185;
+            --glass: rgba(31, 41, 55, 0.85);
+            --shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.6);
+        }
+
+        /* UNIVERSAL SMOOTH TRANSITIONS */
+        body,
+        #topbar,
+        #sidebar,
+        .sb-sec,
+        .card,
+        .src-editor,
+        .wind-override,
+        .axis-box,
+        .coord-input,
+        select,
+        .tab,
+        #statsBar,
+        .stat,
+        .hud,
+        #tooltip,
+        #loader,
+        .leaflet-container,
+        .leaflet-control-zoom a,
+        .leaflet-control-attribution {
+            transition-property: background-color, background, color, border-color, box-shadow;
+            transition-duration: 0.6s;
+            transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         * {
             margin: 0;
             padding: 0;
-            box-sizing: border-box
+            box-sizing: border-box;
         }
 
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-family: var(--font-main);
             background: var(--bg);
             color: var(--text);
             height: 100vh;
             display: flex;
             flex-direction: column;
-            overflow: hidden
+            overflow: hidden;
+            letter-spacing: -0.01em;
         }
 
-        /* TOPBAR */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 20px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--dim);
+        }
+
+        /* TOPBAR UI */
         #topbar {
             display: flex;
             align-items: center;
-            gap: 12px;
-            padding: 0 16px;
-            height: 50px;
-            background: linear-gradient(135deg, var(--panel) 0%, var(--bg) 100%);
-            border-bottom: 2px solid var(--border);
+            gap: 16px;
+            padding: 0 24px;
+            height: 64px;
+            background: var(--panel);
+            border-bottom: 1px solid var(--border);
             flex-shrink: 0;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1)
-        }
-
-        /* Theme-specific overrides */
-        [data-theme="dark"] #topbar {
-            background: linear-gradient(135deg, #1a2332 0%, #243447 100%)
-        }
-
-        [data-theme="dark"] .card {
-            background: rgba(255, 255, 255, 0.05);
-            box-shadow: none
-        }
-
-        [data-theme="dark"] .coord-input {
-            background: rgba(255, 255, 255, 0.05);
-            color: var(--accent)
-        }
-
-        [data-theme="dark"] select {
-            background: rgba(255, 255, 255, 0.05)
-        }
-
-        [data-theme="dark"] .src-editor {
-            background: rgba(255, 107, 138, 0.1)
-        }
-
-        [data-theme="dark"] .wind-override {
-            background: rgba(255, 165, 2, 0.1)
-        }
-
-        [data-theme="dark"] .tab.active {
-            background: rgba(255, 165, 2, 0.1)
-        }
-
-        [data-theme="dark"] .axis-box {
-            background: #020510
-        }
-
-        [data-theme="dark"] .hud {
-            background: rgba(26, 35, 50, .9)
-        }
-
-        [data-theme="dark"] #tooltip {
-            background: rgba(26, 35, 50, .95);
-            color: var(--accent)
-        }
-
-        [data-theme="dark"] #statsBar {
-            background: rgba(26, 35, 50, .95)
-        }
-
-        [data-theme="dark"] #loader {
-            background: rgba(26, 35, 50, .95)
+            box-shadow: var(--shadow);
+            z-index: 100;
         }
 
         .logo {
-            font-family: 'Inter', sans-serif;
-            font-size: 1rem;
-            font-weight: 700;
-            color: var(--accent);
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: var(--text-heading);
             white-space: nowrap;
-            letter-spacing: .05em
+            letter-spacing: .05em;
+            background: linear-gradient(90deg, var(--accent), var(--drone));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
 
         .chip {
-            font-size: .7rem;
-            padding: 4px 10px;
-            border: 1.5px solid;
-            border-radius: 6px;
+            font-size: .72rem;
+            padding: 5px 12px;
+            border: 1px solid transparent;
+            border-radius: var(--radius-md);
             white-space: nowrap;
-            letter-spacing: .05em;
-            font-weight: 600
+            letter-spacing: .02em;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
 
         .chip-g {
-            border-color: var(--green);
+            border-color: rgba(16, 185, 129, 0.3);
             color: var(--green);
-            background: rgba(5, 150, 105, 0.1)
+            background: rgba(16, 185, 129, 0.08);
         }
 
         .chip-o {
-            border-color: var(--orange);
+            border-color: rgba(249, 115, 22, 0.3);
             color: var(--orange);
-            background: rgba(234, 88, 12, 0.1)
+            background: rgba(249, 115, 22, 0.08);
         }
 
-        .chip-d {
-            border-color: var(--drone);
-            color: var(--drone);
-            background: rgba(225, 29, 72, 0.1)
+        .chip-r {
+            border-color: rgba(239, 68, 68, 0.4);
+            color: var(--red);
+            background: rgba(239, 68, 68, 0.12);
         }
 
-        .blink {
-            animation: blink 2s infinite
+        .blink::before {
+            content: '';
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse 1.5s infinite cubic-bezier(0.4, 0, 0.6, 1);
         }
 
-        @keyframes blink {
+        @keyframes pulse {
 
             0%,
             100% {
-                opacity: 1
+                opacity: 1;
+                transform: scale(1);
             }
 
             50% {
-                opacity: .6
+                opacity: .3;
+                transform: scale(0.9);
             }
         }
 
         .wstrip {
             flex: 1;
             display: flex;
-            gap: 20px;
-            font-size: .75rem;
+            gap: 24px;
+            font-size: .8rem;
             color: var(--dim);
-            overflow: hidden;
-            white-space: nowrap;
             align-items: center;
-            font-weight: 500
+            font-weight: 500;
+            border-left: 1px solid var(--border);
+            padding-left: 24px;
+            /* FIX: Allow horizontal scrolling instead of squishing */
+            overflow-x: auto;
+            white-space: nowrap;
+            scrollbar-width: none;
+            /* Hides scrollbar in Firefox */
+        }
+
+        /* FIX: Hides scrollbar in Chrome/Safari/Edge */
+        .wstrip::-webkit-scrollbar {
+            display: none;
+        }
+
+        /* FIX: Forces the spans to maintain their full width */
+        .wstrip span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
         }
 
         .wv {
             font-weight: 700;
-            color: var(--accent)
+            color: var(--text-heading);
+            font-family: 'JetBrains Mono', monospace;
         }
 
         .btn {
-            font-family: 'Inter', sans-serif;
-            font-size: .7rem;
-            padding: 6px 14px;
+            font-family: var(--font-main);
+            font-size: .78rem;
+            padding: 8px 16px;
             cursor: pointer;
-            border-radius: 6px;
-            border: 2px solid var(--accent);
-            background: transparent;
-            color: var(--accent);
-            transition: all .2s;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border);
+            background: var(--panel-card);
+            color: var(--text-heading);
+            transition: background-color 0.6s ease, color 0.6s ease, border-color 0.6s ease, transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             white-space: nowrap;
-            font-weight: 600
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
         }
 
         .btn:hover {
-            background: var(--accent);
-            color: #ffffff;
+            background: var(--accent-glow);
+            border-color: var(--accent);
+            color: var(--accent);
             transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3)
+        }
+
+        .btn:active {
+            transform: translateY(0);
         }
 
         .btn:disabled {
             opacity: .4;
             cursor: not-allowed;
-            transform: none
+            transform: none !important;
+            box-shadow: none !important;
         }
 
         .btn-r {
-            border-color: var(--red);
-            color: var(--red)
+            border-color: rgba(239, 68, 68, 0.3);
+            color: var(--red);
         }
 
         .btn-r:hover {
-            background: var(--red);
-            color: #fff
+            background: rgba(239, 68, 68, 0.1);
+            border-color: var(--red);
+            color: var(--red);
         }
 
-        /* LAYOUT */
+        /* MAIN SYSTEM LAYOUT */
         #main {
             display: flex;
             flex: 1;
-            overflow: hidden
+            overflow: hidden;
+            position: relative;
         }
 
-        /* SIDEBAR */
+        /* TELEMETRY SIDEBAR */
         #sidebar {
-            width: 280px;
+            width: 320px;
             flex-shrink: 0;
             background: var(--panel);
-            border-right: 2px solid var(--border);
+            border-right: 1px solid var(--border);
             display: flex;
             flex-direction: column;
             overflow-y: auto;
-            box-shadow: 4px 0 15px rgba(0, 0, 0, 0.2)
+            box-shadow: var(--shadow);
+            z-index: 10;
         }
 
         .sb-sec {
-            padding: 12px 16px;
-            border-bottom: 1px solid var(--border)
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            animation: fadeInSection 0.4s ease backwards;
+        }
+
+        .sb-sec:nth-child(1) {
+            animation-delay: 0.05s;
+        }
+
+        .sb-sec:nth-child(2) {
+            animation-delay: 0.1s;
+        }
+
+        .sb-sec:nth-child(3) {
+            animation-delay: 0.15s;
+        }
+
+        .sb-sec:nth-child(4) {
+            animation-delay: 0.2s;
+        }
+
+        @keyframes fadeInSection {
+            from {
+                opacity: 0;
+                transform: translateX(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
         }
 
         .sb-t {
-            font-size: .65rem;
-            letter-spacing: .1em;
+            font-size: .72rem;
+            letter-spacing: .08em;
             color: var(--dim);
             text-transform: uppercase;
-            margin-bottom: 10px;
-            font-family: 'Inter', sans-serif;
-            font-weight: 600
+            margin-bottom: 12px;
+            font-weight: 700;
         }
 
         .card {
-            background: #f8fafc;
+            background: var(--panel-card);
             border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 10px 12px;
-            font-size: .75rem;
-            margin-bottom: 8px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1)
+            border-radius: var(--radius-lg);
+            padding: 12px 16px;
+            font-size: .8rem;
+            margin-bottom: 10px;
+            transition: background-color 0.6s ease, border-color 0.2s ease;
+        }
+
+        .card:hover {
+            border-color: var(--dim);
         }
 
         .card:last-child {
-            margin-bottom: 0
+            margin-bottom: 0;
         }
 
         .row {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 4px 0;
-            border-bottom: 1px solid var(--border)
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.15);
         }
 
         .row:last-child {
-            border: none
+            border: none;
+            padding-bottom: 0;
+        }
+
+        .row:first-child {
+            padding-top: 0;
+        }
+
+        .row span:first-child {
+            color: var(--dim);
+            font-weight: 500;
         }
 
         .rv {
-            font-weight: 600;
+            font-weight: 700;
             text-align: right;
-            font-family: 'JetBrains Mono', monospace
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text-heading);
         }
 
         .rv-g {
-            color: var(--green)
+            color: var(--green);
         }
 
         .rv-a {
-            color: var(--accent)
+            color: var(--accent);
         }
 
         .rv-o {
-            color: var(--orange)
+            color: var(--orange);
         }
 
         .rv-r {
-            color: var(--red)
+            color: var(--red);
         }
 
         .rv-d {
-            color: var(--drone)
+            color: var(--drone);
         }
 
-        /* DRONE SOURCE EDITOR */
+        /* HARDWARE FEED SYSTEM PANELS */
         .src-editor {
-            background: rgba(225, 29, 72, 0.05);
-            border: 2px solid var(--drone);
-            border-radius: 8px;
-            padding: 12px;
-            margin-bottom: 8px
+            background: rgba(251, 113, 133, 0.03);
+            border: 1px solid rgba(251, 113, 133, 0.2);
+            border-radius: var(--radius-lg);
+            padding: 16px;
+            margin-bottom: 12px;
         }
 
         .src-editor .src-title {
-            font-size: .65rem;
+            font-size: .72rem;
             color: var(--drone);
-            letter-spacing: .08em;
-            margin-bottom: 10px;
-            font-family: 'Inter', sans-serif;
-            font-weight: 600
+            letter-spacing: .05em;
+            margin-bottom: 12px;
+            font-weight: 700;
         }
 
         .input-row {
             display: flex;
-            gap: 6px;
+            gap: 10px;
             align-items: center;
-            margin-bottom: 6px
+            margin-bottom: 8px;
         }
 
         .input-row label {
-            font-size: .7rem;
-            color: var(--text);
-            width: 35px;
+            font-size: .72rem;
+            color: var(--dim);
+            width: 40px;
             flex-shrink: 0;
-            font-weight: 500
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
         }
 
         .coord-input {
             flex: 1;
-            background: #ffffff;
-            border: 2px solid var(--border);
-            color: var(--text);
+            background: var(--panel-card);
+            border: 1px solid var(--border);
+            color: var(--text-heading);
             font-family: 'JetBrains Mono', monospace;
-            font-size: .75rem;
-            padding: 6px 8px;
-            border-radius: 6px;
+            font-size: .8rem;
+            padding: 8px 12px;
+            border-radius: var(--radius-md);
             outline: none;
             width: 100%;
-            transition: all 0.2s
+            transition: background-color 0.6s ease, color 0.6s ease, border-color 0.2s ease, box-shadow 0.2s ease;
         }
 
         .coord-input:focus {
             border-color: var(--accent);
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1)
+            background: var(--panel);
+            box-shadow: 0 0 0 3px var(--accent-glow);
         }
 
         .coord-input.invalid {
             border-color: var(--red);
-            color: var(--red)
+            background: rgba(239, 68, 68, 0.05);
+            color: var(--red);
         }
 
         .wind-override {
-            background: rgba(234, 88, 12, 0.05);
-            border: 2px solid var(--orange);
-            border-radius: 8px;
-            padding: 12px;
-            margin-bottom: 8px
+            background: rgba(249, 115, 22, 0.03);
+            border: 1px solid rgba(249, 115, 22, 0.2);
+            border-radius: var(--radius-lg);
+            padding: 16px;
+            margin-bottom: 12px;
         }
 
         .wind-override .wo-title {
-            font-size: .65rem;
+            font-size: .72rem;
             color: var(--orange);
-            letter-spacing: .08em;
-            margin-bottom: 10px;
-            font-family: 'Inter', sans-serif;
-            font-weight: 600
+            letter-spacing: .05em;
+            margin-bottom: 12px;
+            font-weight: 700;
         }
 
         .wind-override .mode-tabs {
             display: flex;
-            gap: 4px;
-            margin-bottom: 10px
+            gap: 6px;
+            margin-bottom: 14px;
+            background: var(--panel-card);
+            padding: 4px;
+            border-radius: var(--radius-md);
         }
 
         .tab {
             flex: 1;
             text-align: center;
-            padding: 6px;
-            font-size: .7rem;
+            padding: 8px;
+            font-size: .72rem;
             cursor: pointer;
-            border: 2px solid var(--border);
+            border: 1px solid transparent;
             color: var(--dim);
-            border-radius: 6px;
-            transition: all .2s;
-            font-weight: 500
+            border-radius: var(--radius-md);
+            font-weight: 600;
+            transition: background-color 0.6s ease, color 0.6s ease, box-shadow 0.2s ease;
         }
 
         .tab.active {
-            border-color: var(--orange);
+            border-color: var(--border);
             color: var(--orange);
-            background: rgba(234, 88, 12, 0.05)
+            background: var(--panel);
+            box-shadow: var(--shadow);
         }
 
-        /* SLIDERS */
+        /* SLIDERS & FORM INPUT CONTROLS */
         .ctrl {
             display: flex;
             flex-direction: column;
-            gap: 4px;
-            margin-bottom: 10px
+            gap: 6px;
+            margin-bottom: 14px;
         }
 
         .ctrl:last-child {
-            margin-bottom: 0
+            margin-bottom: 0;
         }
 
         .ctrl label {
-            font-size: .7rem;
+            font-size: .78rem;
             color: var(--text);
             display: flex;
             justify-content: space-between;
-            font-weight: 500
+            font-weight: 500;
         }
 
         .ctrl label em {
             color: var(--accent);
             font-style: normal;
             font-weight: 700;
-            font-family: 'JetBrains Mono', monospace
+            font-family: 'JetBrains Mono', monospace;
         }
 
         input[type=range] {
             width: 100%;
-            height: 6px;
+            height: 5px;
             -webkit-appearance: none;
+            appearance: none;
             background: var(--border);
-            border-radius: 3px;
+            border-radius: 10px;
             cursor: pointer;
-            outline: none
+            outline: none;
         }
 
         input[type=range]::-webkit-slider-thumb {
             -webkit-appearance: none;
+            appearance: none;
             width: 16px;
             height: 16px;
             border-radius: 50%;
             background: var(--accent);
             cursor: pointer;
-            box-shadow: 0 0 8px var(--accent);
-            border: 2px solid white
+            border: 2px solid var(--panel);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+            transition: transform 0.1s ease;
+        }
+
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
         }
 
         input[type=range]::-moz-range-thumb {
@@ -1244,317 +847,443 @@
             border-radius: 50%;
             background: var(--accent);
             cursor: pointer;
-            border: 2px solid white;
-            box-shadow: 0 0 8px var(--accent)
+            border: 2px solid var(--panel);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+            appearance: none;
         }
 
         select {
             width: 100%;
-            background: #ffffff;
-            border: 2px solid var(--border);
-            color: var(--text);
-            padding: 6px 8px;
-            font-family: 'Inter', sans-serif;
-            font-size: .75rem;
-            border-radius: 6px;
+            background: var(--panel-card);
+            border: 1px solid var(--border);
+            color: var(--text-heading);
+            padding: 8px 12px;
+            font-family: var(--font-main);
+            font-size: .8rem;
+            border-radius: var(--radius-md);
             cursor: pointer;
-            transition: all 0.2s
+            outline: none;
+            transition: background-color 0.6s ease, color 0.6s ease, border-color 0.2s ease;
         }
 
         select:focus {
             border-color: var(--accent);
-            outline: none
+            box-shadow: 0 0 0 3px var(--accent-glow);
         }
 
         .scale-bar {
-            height: 12px;
-            border-radius: 6px;
-            margin: 6px 0 4px;
+            height: 14px;
+            border-radius: 4px;
+            margin: 8px 0 6px;
             background: linear-gradient(to right, #1e293b, #475569, #0ea5e9, #06b6d4, #10b981, #84cc16, #f59e0b, #ef4444);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15)
         }
 
         .scale-ticks {
             display: flex;
             justify-content: space-between;
-            font-size: .65rem;
+            font-size: .68rem;
             color: var(--dim);
-            font-family: 'JetBrains Mono', monospace
+            font-family: 'JetBrains Mono', monospace;
         }
 
-        /* 3D AXIS INFO BOX */
+        /* VECTOR 3D COORD SYS LABELS */
         .axis-box {
-            background: #f8fafc;
-            border: 2px solid var(--border);
-            border-radius: 8px;
-            padding: 10px 12px;
-            font-size: .75rem
+            background: var(--panel-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 14px;
+            font-size: .8rem;
         }
 
         .axis-row {
             display: flex;
             align-items: center;
-            gap: 5px;
-            padding: 2px 0
+            gap: 10px;
+            padding: 6px 0;
         }
 
         .ax {
-            width: 14px;
-            height: 14px;
-            border-radius: 2px;
+            width: 18px;
+            height: 18px;
+            border-radius: 4px;
             flex-shrink: 0;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: .44rem;
-            font-weight: 700
+            font-size: .65rem;
+            font-weight: 800;
+            font-family: 'JetBrains Mono', monospace;
         }
 
         .ax-x {
-            background: #330011;
-            color: var(--red)
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--red);
         }
 
         .ax-y {
-            background: #001133;
-            color: #4488ff
+            background: rgba(56, 189, 248, 0.15);
+            color: var(--accent);
         }
 
         .ax-z {
-            background: #003311;
-            color: var(--green)
+            background: rgba(52, 211, 153, 0.15);
+            color: var(--green);
         }
 
         .axis-desc {
             color: var(--dim);
-            flex: 1
+            flex: 1;
+            font-size: .78rem;
         }
 
         .axis-val {
-            color: var(--accent);
+            color: var(--text-heading);
             font-weight: 700;
-            text-align: right
+            text-align: right;
+            font-family: 'JetBrains Mono', monospace;
         }
 
-        /* MAP */
+        /* GEOSPATIAL MAP VIEWPORT WRAPPER */
         #mapWrap {
             flex: 1;
             position: relative;
-            overflow: hidden
+            overflow: hidden;
+            background-color: var(--bg);
+            transition: background-color 0.6s ease;
         }
 
         #map {
             position: absolute;
             inset: 0;
-            z-index: 1
+            z-index: 1;
         }
 
         #plumeCanvas {
             position: absolute;
             inset: 0;
             pointer-events: none;
-            z-index: 10
+            z-index: 10;
         }
 
-        /* HUD */
+        /* FLIGHT CONTROLLER GLASS HUD OVERLAYS */
         .hud {
             position: absolute;
             z-index: 20;
-            background: rgba(255, 255, 255, .95);
-            border: 2px solid var(--border);
-            padding: 8px 12px;
-            font-size: .75rem;
+            background: var(--glass);
+            border: 1px solid var(--border);
+            padding: 12px 16px;
+            font-size: .78rem;
             pointer-events: none;
-            line-height: 1.6;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            backdrop-filter: blur(10px)
+            line-height: 1.5;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            animation: hudPop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) backwards;
+        }
+
+        @keyframes hudPop {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
         }
 
         #hudW {
-            top: 12px;
-            left: 12px;
-            border-color: var(--orange)
+            top: 16px;
+            left: 16px;
+            border-left: 3px solid var(--orange);
         }
 
         #hudS {
-            top: 12px;
-            right: 12px;
-            text-align: right
+            top: 16px;
+            right: 16px;
+            text-align: right;
+            border-right: 3px solid var(--accent);
         }
 
         #hudC {
-            bottom: 40px;
-            left: 12px
+            bottom: 16px;
+            left: 16px;
+            font-family: 'JetBrains Mono', monospace;
         }
 
         #hudDrone {
-            left: 12px;
+            left: 16px;
             top: 50%;
             transform: translateY(-50%);
-            border-color: var(--drone);
-            text-align: left;
-            min-width: 200px
+            border-left: 3px solid var(--drone);
+            min-width: 220px;
+            animation: hudPopDrone 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) backwards;
+        }
+
+        @keyframes hudPopDrone {
+            from {
+                opacity: 0;
+                transform: translateY(-50%) translateX(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(-50%) translateX(0);
+            }
         }
 
         #tooltip {
             position: absolute;
             z-index: 30;
-            background: rgba(255, 255, 255, .95);
-            border: 2px solid var(--accent);
-            padding: 6px 10px;
+            background: var(--glass);
+            border: 1px solid var(--accent);
+            padding: 10px 14px;
             font-size: .75rem;
             pointer-events: none;
             display: none;
-            border-radius: 6px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            color: var(--text)
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow);
+            color: var(--text-heading);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            font-family: 'JetBrains Mono', monospace;
+            line-height: 1.5;
         }
 
         #tooltip em {
-            color: var(--green);
+            color: var(--accent);
             font-style: normal;
-            font-weight: 600
+            font-weight: 700;
         }
 
-        /* STATS BAR */
+        /* ANALYTICS TERMINAL FOOTER BAR */
         #statsBar {
             display: flex;
-            border-top: 2px solid var(--border);
-            background: rgba(255, 255, 255, .95);
+            border-top: 1px solid var(--border);
+            background: var(--panel);
             flex-shrink: 0;
-            backdrop-filter: blur(10px)
+            box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.05);
+            z-index: 100;
+            overflow-x: auto;
         }
 
         .stat {
             flex: 1;
-            padding: 6px 12px;
+            min-width: 140px;
+            padding: 14px 20px;
             border-right: 1px solid var(--border);
-            font-size: .75rem
+            font-size: .8rem;
+            transition: background-color 0.2s ease;
+        }
+
+        .stat:hover {
+            background-color: var(--panel-card);
         }
 
         .stat:last-child {
-            border-right: none
+            border-right: none;
         }
 
         .stat .sl {
             color: var(--dim);
-            font-size: .65rem;
+            font-size: .68rem;
             display: block;
-            margin-bottom: 2px;
-            letter-spacing: .02em;
-            font-weight: 500
+            margin-bottom: 4px;
+            letter-spacing: .04em;
+            text-transform: uppercase;
+            font-weight: 600;
         }
 
         .stat .sv {
-            color: var(--accent);
+            color: var(--text-heading);
             font-weight: 700;
-            font-size: .85rem
+            font-size: 1rem;
+            font-family: 'JetBrains Mono', monospace;
         }
 
-        /* LOADER */
+        /* CRITICAL SYSTEM LOAD OVERLAY */
         #loader {
             position: absolute;
             inset: 0;
             z-index: 900;
-            background: rgba(255, 255, 255, .95);
+            background: var(--bg);
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 15px;
-            backdrop-filter: blur(10px)
+            gap: 20px;
+            transition: opacity 0.4s ease;
+        }
+
+        .spinner-container {
+            position: relative;
+            width: 64px;
+            height: 64px;
         }
 
         .spinner {
-            width: 40px;
-            height: 40px;
+            width: 100%;
+            height: 100%;
             border: 3px solid var(--border);
             border-top-color: var(--accent);
             border-radius: 50%;
-            animation: spin .8s linear infinite
+            animation: spin .8s cubic-bezier(0.55, 0.055, 0.675, 0.19) infinite;
+        }
+
+        .spinner-inner {
+            position: absolute;
+            width: 44px;
+            height: 44px;
+            top: 10px;
+            left: 10px;
+            border: 3px solid transparent;
+            border-bottom-color: var(--drone);
+            border-radius: 50%;
+            animation: spin 1.2s cubic-bezier(0.215, 0.610, 0.355, 1) infinite reverse;
         }
 
         @keyframes spin {
             to {
-                transform: rotate(360deg)
+                transform: rotate(360deg);
             }
         }
 
         #loader p {
-            font-size: .9rem;
-            color: var(--accent);
-            font-family: 'Inter', sans-serif;
-            font-weight: 600
+            font-size: 1rem;
+            color: var(--text-heading);
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 700;
+            letter-spacing: 0.05em;
         }
 
         #loaderLog {
-            font-size: .75rem;
-            color: var(--text);
+            font-size: .78rem;
+            color: var(--dim);
             max-width: 400px;
             text-align: center;
-            line-height: 1.6
+            line-height: 1.6;
+            font-family: 'JetBrains Mono', monospace;
         }
 
-        /* Drone marker pulsing ring */
-        .drone-marker {
+        /* UNIFIED LEAFLET MAP GRAPHICS OVERRIDES */
+        .drone-marker-pulsing {
             position: relative;
-            display: flex;
-            align-items: center;
-            justify-content: center
         }
 
-        .drone-pulse {
-            width: 18px;
-            height: 18px;
+        .drone-marker-pulsing::before {
+            content: '';
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            left: -8px;
+            top: -8px;
             border-radius: 50%;
             background: var(--drone);
-            border: 2px solid #fff;
-            box-shadow: 0 0 14px var(--drone);
-            animation: dpulse 1.6s infinite
+            opacity: 0;
+            animation: mapPulse 1.8s cubic-bezier(0.24, 0, 0.38, 1) infinite;
         }
 
-        @keyframes dpulse {
-
-            0%,
-            100% {
-                box-shadow: 0 0 6px var(--drone)
+        @keyframes mapPulse {
+            0% {
+                transform: scale(0.3);
+                opacity: 0;
             }
 
             50% {
-                box-shadow: 0 0 22px var(--drone), 0 0 8px #fff3
+                opacity: 0.22;
+            }
+
+            100% {
+                transform: scale(1.8);
+                opacity: 0;
             }
         }
 
-        /* Leaflet white mode overrides */
-        .leaflet-container {
-            background: #1a202c
+        .leaflet-control-zoom {
+            border: none !important;
+            box-shadow: var(--shadow) !important;
+            border-radius: var(--radius-md) !important;
+            overflow: hidden;
         }
 
         .leaflet-control-zoom a {
-            background: #ffffff;
-            color: var(--text);
-            border-color: var(--border)
+            background: var(--panel) !important;
+            color: var(--text-heading) !important;
+            border: 1px solid var(--border) !important;
+            transition: background-color 0.2s ease, color 0.2s ease !important;
+            font-family: 'JetBrains Mono', monospace !important;
         }
 
         .leaflet-control-zoom a:hover {
-            background: var(--accent);
-            color: #ffffff
+            background: var(--accent) !important;
+            color: #ffffff !important;
         }
 
         .leaflet-control-attribution {
-            background: rgba(255, 255, 255, .9) !important;
+            background: var(--glass) !important;
             color: var(--dim) !important;
-            font-size: .65rem !important
+            font-size: .65rem !important;
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            border-radius: var(--radius-md) 0 0 0;
+            border-top: 1px solid var(--border);
+            border-left: 1px solid var(--border);
         }
 
-        .leaflet-tooltip {
-            background: rgba(255, 255, 255, .95);
-            border: 1px solid var(--border);
-            color: var(--text);
-            font-family: 'JetBrains Mono', monospace;
-            font-size: .75rem;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15)
+        /* ------------------------------------------------------------- */
+        /* MOBILE RESPONSIVE LAYOUT (Auto stacks gracefully below 900px) */
+        /* ------------------------------------------------------------- */
+        @media (max-width: 900px) {
+            #main {
+                flex-direction: column-reverse;
+            }
+
+            #sidebar {
+                width: 100%;
+                flex: 1;
+                border-right: none;
+                border-top: 1px solid var(--border);
+            }
+
+            #mapWrap {
+                height: 45vh;
+                flex: none;
+                border-bottom: 1px solid var(--border);
+            }
+
+            #topbar {
+                height: auto;
+                padding: 12px 16px;
+                overflow-x: auto;
+                white-space: nowrap;
+            }
+
+            .hud {
+                padding: 8px 10px;
+                font-size: 0.7rem;
+            }
+
+            #hudS {
+                right: 10px;
+                top: 10px;
+            }
+
+            #hudW {
+                left: 10px;
+                top: 10px;
+            }
+
+            #hudDrone {
+                left: 10px;
+                transform: translateY(-30%);
+                min-width: 180px;
+            }
+
+            #hudC {
+                display: none;
+            }
         }
     </style>
 </head>
@@ -1562,23 +1291,22 @@
 <body>
 
     <div id="topbar">
-        <div class="logo">&#9671; ISOTOPER B15 &#183; MQ-8 &#183; H&#8322;</div>
-        <div class="chip chip-g blink">&#9679; LIVE</div>
-        <div class="chip chip-d">ISOTOPER B15</div>
-        <div class="chip chip-o">GAUSSIAN 3D</div>
-        <div class="wstrip" id="wstrip"><span>Fetching live weather&hellip;</span></div>
-        <button class="btn" id="btnTheme" onclick="toggleTheme()">🌙 Dark Mode</button>
-        <button class="btn" id="btnRefresh" onclick="fetchLiveWeather()">&#8635; Weather</button>
-        <button class="btn btn-r" onclick="resetDroneToDefault()">&#8634; Reset Src</button>
+        <div class="logo">ISOTOPER B15</div>
+        <div class="chip chip-r blink">LIVE TELEMETRY</div>
+        <div class="chip chip-o">GAUSSIAN DESCENT MODEL</div>
+        <div class="wstrip" id="wstrip"><span>Establishing connection to station stream&hellip;</span></div>
+        <button class="btn" id="btnTheme" onclick="toggleTheme()">☀️ Light Mode</button>
+        <button class="btn" id="btnRefresh" onclick="fetchLiveWeather()">🔄 Synchronize Weather</button>
+        <button class="btn btn-r" onclick="resetDroneToDefault()">↩ Reset Source Core</button>
     </div>
 
     <div id="main">
         <div id="sidebar">
 
             <div class="sb-sec">
-                <div class="sb-t">&#9671; ISOTOPER B15 / Source Position</div>
+                <div class="sb-t">Geospatial Target / Source Origin</div>
                 <div class="src-editor">
-                    <div class="src-title">&#9671; ISOTOPER B15 &#183; MQ-8 LOCATION</div>
+                    <div class="src-title">AVIONICS COORD LOCK (MQ-8)</div>
                     <div class="input-row">
                         <label>LAT</label>
                         <input class="coord-input" id="inLat" type="number" step="0.0001" value="23.0942"
@@ -1594,158 +1322,166 @@
                         <input class="coord-input" id="inAlt" type="number" step="1" value="30"
                             placeholder="B15 altitude (m)">
                     </div>
-                    <div style="display:flex;gap:4px;margin-top:5px">
-                        <button class="btn" style="flex:1;font-size:.48rem" onclick="applyDronePosition()">&#10003;
-                            Apply</button>
+                    <div style="display:flex;gap:6px;margin-top:10px">
+                        <button class="btn" style="flex:1;justify-content: center;"
+                            onclick="applyDronePosition()">Commit Vector</button>
                         <button class="btn"
-                            style="flex:1;font-size:.48rem;border-color:var(--yellow);color:var(--yellow)"
-                            onclick="pickFromMap()">&#8982; Pick on Map</button>
+                            style="flex:1;justify-content: center;border-color:var(--yellow);color:var(--yellow)"
+                            onclick="pickFromMap()">Map Intercept</button>
                     </div>
                     <div id="pickMsg"
-                        style="display:none;font-size:.46rem;color:var(--yellow);margin-top:4px;text-align:center">Click
-                        on map to set ISOTOPER B15 location</div>
+                        style="display:none;font-size:.7rem;color:var(--yellow);margin-top:8px;text-align:center;font-weight: 500;">
+                        Select grid coordinate directly on canvas</div>
                 </div>
                 <div class="card">
-                    <div class="row"><span>Active Lat</span><span class="rv rv-d" id="srcLatDisp">23.0942</span></div>
-                    <div class="row"><span>Active Lon</span><span class="rv rv-d" id="srcLonDisp">90.0157</span></div>
-                    <div class="row"><span>B15 Alt (z)</span><span class="rv rv-a" id="srcAltDisp">30 m</span></div>
+                    <div class="row"><span>Locked Lat</span><span class="rv rv-d" id="srcLatDisp">23.0942</span></div>
+                    <div class="row"><span>Locked Lon</span><span class="rv rv-d" id="srcLonDisp">90.0157</span></div>
+                    <div class="row"><span>Rel Elevation (z)</span><span class="rv rv-a" id="srcAltDisp">30 m</span>
+                    </div>
                 </div>
             </div>
 
             <div class="sb-sec">
-                <div class="sb-t">&#9676; Wind Parameters</div>
+                <div class="sb-t">Atmospheric Macro-Environment</div>
                 <div class="wind-override">
-                    <div class="wo-title">&#9676; WIND DATA SOURCE</div>
+                    <div class="wo-title">ANEMOMETER SOURCE INTERFACE</div>
                     <div class="mode-tabs">
-                        <div class="tab active" id="tabLive" onclick="setWindMode('live')">LIVE API</div>
-                        <div class="tab" id="tabManual" onclick="setWindMode('manual')">MANUAL</div>
+                        <div class="tab active" id="tabLive" onclick="setWindMode('live')">STATION API</div>
+                        <div class="tab" id="tabManual" onclick="setWindMode('manual')">MANUAL STRAT</div>
                     </div>
                     <div id="manualWindPanel" style="display:none">
                         <div class="ctrl">
-                            <label>Wind Speed (m/s) <em id="lWS">2.6</em></label>
+                            <label>Velocity (m/s) <em id="lWS">2.6</em></label>
                             <input type="range" id="manWS" min="0.1" max="20" step="0.1" value="2.6">
                         </div>
                         <div class="ctrl">
-                            <label>Wind Dir FROM (&#176;) <em id="lWD">315</em></label>
+                            <label>Wind Bearing FROM (°) <em id="lWD">315</em></label>
                             <input type="range" id="manWD" min="0" max="359" step="1" value="315">
                         </div>
                     </div>
                 </div>
                 <div class="card">
-                    <div class="row"><span>Wind Speed</span><span class="rv rv-a" id="lcWind">&mdash;</span></div>
-                    <div class="row"><span>Wind FROM</span><span class="rv rv-a" id="lcDir">&mdash;</span></div>
-                    <div class="row"><span>Plume TO</span><span class="rv rv-o" id="lcPlumeDir">&mdash;</span></div>
-                    <div class="row"><span>Temperature</span><span class="rv rv-g" id="lcTemp">&mdash;</span></div>
-                    <div class="row"><span>Humidity</span><span class="rv rv-g" id="lcHum">&mdash;</span></div>
-                    <div class="row"><span>Conditions</span><span class="rv rv-g" id="lcCode">&mdash;</span></div>
+                    <div class="row"><span>Wind Velocity</span><span class="rv rv-a" id="lcWind">&mdash;</span></div>
+                    <div class="row"><span>Origin Vector</span><span class="rv rv-a" id="lcDir">&mdash;</span></div>
+                    <div class="row"><span>Plume Trajectory</span><span class="rv rv-o" id="lcPlumeDir">&mdash;</span>
+                    </div>
+                    <div class="row"><span>Ambient Temp</span><span class="rv rv-g" id="lcTemp">&mdash;</span></div>
+                    <div class="row"><span>Relative Humidity</span><span class="rv rv-g" id="lcHum">&mdash;</span></div>
+                    <div class="row"><span>Current Profile</span><span class="rv rv-g" id="lcCode">&mdash;</span></div>
                 </div>
             </div>
 
             <div class="sb-sec">
-                <div class="sb-t">&#9650; Gaussian 3D Coordinate System</div>
+                <div class="sb-t">Gaussian 3D System Matrices</div>
                 <div class="axis-box">
                     <div class="axis-row">
                         <div class="ax ax-x">X</div>
-                        <div class="axis-desc">Downwind (along plume centreline)</div>
+                        <div class="axis-desc">Downwind Axis</div>
                         <div class="axis-val" id="axX">&mdash;</div>
                     </div>
                     <div class="axis-row">
                         <div class="ax ax-y">Y</div>
-                        <div class="axis-desc">Crosswind (lateral spread)</div>
+                        <div class="axis-desc">Crosswind Drift</div>
                         <div class="axis-val" id="axY">&mdash;</div>
                     </div>
                     <div class="axis-row">
                         <div class="ax ax-z">Z</div>
-                        <div class="axis-desc">Vertical (height above ground)</div>
+                        <div class="axis-desc">Vertical Gradient</div>
                         <div class="axis-val" id="axZ">&mdash;</div>
                     </div>
                     <div
-                        style="margin-top:4px;padding-top:4px;border-top:1px solid var(--border);font-size:.65rem;color:var(--dim)">
-                        C(x,y,z) = Q/(2&#960;&#963;y&#963;z&#183;U) &#183; exp(-y&#178;/2&#963;y&#178;) &#183;
-                        [exp(-(z-H)&#178;/2&#963;z&#178;) + exp(-(z+H)&#178;/2&#963;z&#178;)]
+                        style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:.65rem;color:var(--dim);font-family:'JetBrains Mono', monospace;line-height:1.4;">
+                        C(x,y,z) = Q/(2πσyσz·U) · exp(-y²/2σy²) · [exp(-(z-H)²/2σz²) + exp(-(z+H)²/2σz²)]
                     </div>
                 </div>
-                <div class="card" style="margin-top:5px">
-                    <div class="row"><span>&sigma;y (crosswind spread)</span><span class="rv rv-a"
-                            id="sSy">&mdash;</span></div>
-                    <div class="row"><span>&sigma;z (vertical spread)</span><span class="rv rv-a"
-                            id="sSz">&mdash;</span></div>
-                    <div class="row"><span>H effective</span><span class="rv rv-a" id="sH">&mdash;</span></div>
-                    <div class="row"><span>Peak conc. dist.</span><span class="rv rv-o" id="sDist">&mdash;</span></div>
+                <div class="card" style="margin-top:10px">
+                    <div class="row"><span>σy Lateral Dispersion</span><span class="rv rv-a" id="sSy">&mdash;</span>
+                    </div>
+                    <div class="row"><span>σz Vertical Dispersion</span><span class="rv rv-a" id="sSz">&mdash;</span>
+                    </div>
+                    <div class="row"><span>Effective Core Height (H)</span><span class="rv rv-a" id="sH">&mdash;</span>
+                    </div>
+                    <div class="row"><span>Peak Density Distance</span><span class="rv rv-o" id="sDist">&mdash;</span>
+                    </div>
                 </div>
             </div>
 
             <div class="sb-sec">
-                <div class="sb-t">&#9632; Air Quality (Open-Meteo)</div>
+                <div class="sb-t">Local Ambient Air Index</div>
                 <div class="card">
-                    <div class="row"><span>PM2.5</span><span class="rv rv-g" id="aqPm25">&mdash;</span></div>
-                    <div class="row"><span>PM10</span><span class="rv rv-g" id="aqPm10">&mdash;</span></div>
-                    <div class="row"><span>NO&#8322;</span><span class="rv rv-g" id="aqNo2">&mdash;</span></div>
-                    <div class="row"><span>Euro AQI</span><span class="rv" id="aqAqi">&mdash;</span></div>
+                    <div class="row"><span>Particulate PM2.5</span><span class="rv rv-g" id="aqPm25">&mdash;</span>
+                    </div>
+                    <div class="row"><span>Particulate PM10</span><span class="rv rv-g" id="aqPm10">&mdash;</span></div>
+                    <div class="row"><span>Nitrogen Dioxide NO₂</span><span class="rv rv-g" id="aqNo2">&mdash;</span>
+                    </div>
+                    <div class="row"><span>European AQI Standard</span><span class="rv" id="aqAqi">&mdash;</span></div>
                 </div>
             </div>
 
             <div class="sb-sec">
-                <div class="sb-t">Google Sheets / MQ-8 Live Feed</div>
-                <div class="card" style="border-color:var(--green);margin-bottom:8px">
-                    <div style="display:flex;gap:4px;align-items:center;margin-bottom:4px">
-                        <span style="font-size:.44rem;color:var(--dim)">Ro (kOhm)</span>
-                        <input id="mq8Ro" class="coord-input" style="width:36px;text-align:center" value="10"
+                <div class="sb-t">Sensory Node / MQ-8 Core Data</div>
+                <div class="card" style="border-color:rgba(16, 185, 129, 0.4);background: rgba(16, 185, 129, 0.02);">
+                    <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">
+                        <span style="font-size:.7rem;color:var(--dim);font-family:'JetBrains Mono';">R₀(kΩ)</span>
+                        <input id="mq8Ro" class="coord-input" style="padding:4px 8px; text-align:center" value="10"
                             type="number" step="0.1">
-                        <span style="font-size:.44rem;color:var(--dim)">RL (kOhm)</span>
-                        <input id="mq8RL" class="coord-input" style="width:36px;text-align:center" value="10"
+                        <span style="font-size:.7rem;color:var(--dim);font-family:'JetBrains Mono';">R_L(kΩ)</span>
+                        <input id="mq8RL" class="coord-input" style="padding:4px 8px; text-align:center" value="10"
                             type="number" step="0.1">
                     </div>
-                    <button class="btn" style="width:100%;font-size:.48rem" onclick="fetchSheetData()">Fetch Sheet
-                        Data</button>
-                    <div id="sheetStatus" style="font-size:.44rem;color:var(--dim);margin-top:4px;text-align:center">Not
-                        connected</div>
+                    <button class="btn"
+                        style="width:100%;justify-content: center;background: var(--accent);color:#fff;border-color:var(--accent)"
+                        onclick="fetchSheetData()">Request Core Bus Sync</button>
+                    <div id="sheetStatus"
+                        style="font-size:.7rem;color:var(--dim);margin-top:8px;text-align:center;font-weight: 500;">Node
+                        unbound</div>
                 </div>
                 <div class="card">
-                    <div class="row"><span>Raw ADC</span><span class="rv rv-a" id="mq8ADC">---</span></div>
-                    <div class="row"><span>Voltage</span><span class="rv rv-a" id="mq8Volt">---</span></div>
-                    <div class="row"><span>Rs/Ro</span><span class="rv rv-o" id="mq8RsRo">---</span></div>
-                    <div class="row"><span>H2 ppm</span><span class="rv rv-g" id="mq8PPM">---</span></div>
+                    <div class="row"><span>Raw Quantized ADC</span><span class="rv rv-a" id="mq8ADC">---</span></div>
+                    <div class="row"><span>Calculated Bus EMF</span><span class="rv rv-a" id="mq8Volt">---</span></div>
+                    <div class="row"><span>Resistance Ratio Rs/Ro</span><span class="rv rv-o" id="mq8RsRo">---</span>
+                    </div>
+                    <div class="row"><span>H₂ PPM Quantization</span><span class="rv rv-g" id="mq8PPM">---</span></div>
                 </div>
             </div>
 
             <div class="sb-sec">
-                <div class="sb-t">&#9670; Dispersion Parameters</div>
+                <div class="sb-t">Plume Dispersion Boundary Coefficients</div>
                 <div class="ctrl" style="display:none;">
-                    <label>Emission Q (kg/s) <em id="lQ">0.0005</em></label>
+                    <label>Mass Emission Rate Q (kg/s) <em id="lQ">0.0005</em></label>
                     <input type="range" id="Q" min="0.00001" max="0.05" step="0.00001" value="0.0005">
                 </div>
                 <div class="ctrl">
-                    <label>Max Plume Range (m) <em id="lRange">1000</em></label>
+                    <label>Maximum Boundary Range (m) <em id="lRange">1000</em></label>
                     <input type="range" id="maxRange" min="100" max="5000" step="50" value="1000">
                 </div>
                 <div class="ctrl">
-                    <label>Effective Height H (m) <em id="lH">30</em></label>
+                    <label>Virtual Plume Elevation H (m) <em id="lH">30</em></label>
                     <input type="range" id="Heff" min="0" max="100" step="0.5" value="30">
                 </div>
                 <div class="ctrl">
-                    <label>Stability Class <em id="lsc">Near Neutral</em></label>
+                    <label>Pasquill Stability Class <em id="lsc">Near Neutral</em></label>
                     <select id="stability">
-                        <option value="A">A - Extremely Unstable</option>
-                        <option value="B">B - Moderately Unstable</option>
-                        <option value="C">C - Slightly Unstable</option>
-                        <option value="D" selected>D - Near Neutral</option>
-                        <option value="E">E - Moderately Stable</option>
-                        <option value="F">F - Extremely Stable</option>
+                        <option value="A">A — Extreme Thermal Instability</option>
+                        <option value="B">B — Moderate Instability</option>
+                        <option value="C">C — Minor Instability</option>
+                        <option value="D" selected>D — Neutral Matrix Standard</option>
+                        <option value="E">E — Moderate Micro-Stability</option>
+                        <option value="F">F — Extreme Stability Stratum</option>
                     </select>
                 </div>
                 <div class="ctrl">
-                    <label>View Height z (m) <em id="lZslice">0</em></label>
+                    <label>Cross-Section Z Plane (m) <em id="lZslice">0</em></label>
                     <input type="range" id="Zslice" min="0" max="80" step="1" value="0">
                 </div>
                 <div class="ctrl">
-                    <label>Overlay Opacity <em id="lopac">0.80</em></label>
+                    <label>Canvas Overlay Opacity <em id="lopac">0.80</em></label>
                     <input type="range" id="opacity" min="0.1" max="1" step="0.05" value="0.80">
                 </div>
             </div>
 
             <div class="sb-sec">
-                <div class="sb-t">&#9632; Concentration (&micro;g/m&sup3;)</div>
+                <div class="sb-t">Mass Concentration Density Scale (µg/m³)</div>
                 <div class="scale-bar"></div>
                 <div class="scale-ticks">
                     <span>0</span><span id="scT1">&mdash;</span><span id="scT2">&mdash;</span>
@@ -1760,58 +1496,72 @@
             <canvas id="plumeCanvas"></canvas>
 
             <div class="hud" id="hudW">
-                <canvas id="compass" width="54" height="54" style="display:block;margin-bottom:4px"></canvas>
-                <div id="hudWT" style="color:var(--orange)">Wind: &mdash;</div>
+                <canvas id="compass" width="54" height="54"
+                    style="display:block;margin-bottom:6px;filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15));"></canvas>
+                <div id="hudWT" style="color:var(--orange);font-family:'JetBrains Mono',monospace;font-weight:700">
+                    Vector Status: Scan pending</div>
             </div>
 
             <div class="hud" id="hudS">
-                <div id="hudST" style="color:var(--yellow)">&#9679; INIT</div>
-                <div id="hudTime" style="color:var(--dim);font-size:.46rem;margin-top:1px"></div>
+                <div id="hudST"
+                    style="color:var(--yellow);font-family:'Orbitron',sans-serif;font-weight:800;font-size:0.85rem;letter-spacing:0.05em">
+                    SYSTEM BOOT</div>
+                <div id="hudTime" style="color:var(--dim);font-size:.68rem;margin-top:2px;font-family:'JetBrains Mono'">
+                </div>
             </div>
 
             <div class="hud" id="hudC">
-                <span id="coordTxt" style="color:var(--dim)">Hover map for coordinates</span>
+                <span id="coordTxt" style="color:var(--text-heading);font-weight:500">Awaiting radar lock
+                    positioning</span>
             </div>
 
             <div class="hud" id="hudDrone">
-                <div style="color:var(--drone);margin-bottom:2px">&#9671; ISOTOPER B15</div>
-                <div id="dronePos" style="font-size:.5rem">23.0942&deg;N 90.0157&deg;E</div>
-                <div id="droneAlt" style="font-size:.5rem;color:var(--accent)">Alt: 30 m</div>
+                <div
+                    style="color:var(--drone);margin-bottom:4px;font-family:'Orbitron',sans-serif;font-weight:800;letter-spacing:0.02em">
+                    ◆ TARGET DETECTOR DRONE</div>
+                <div id="dronePos" style="font-size:.75rem;font-family:'JetBrains Mono';font-weight:500;">23.09422°N
+                    90.01574°E</div>
+                <div id="droneAlt"
+                    style="font-size:.75rem;color:var(--accent);font-family:'JetBrains Mono';font-weight:700;margin-top:2px;">
+                    ALT STACK: 30.00m AGL</div>
             </div>
 
             <div id="tooltip"></div>
 
             <div id="loader">
-                <div class="spinner"></div>
-                <p>INITIALIZING ISOTOPER B15</p>
-                <small style="color:var(--dim);font-size:.48rem">ISOTOPER B15 &#183; MQ-8 &#183; Open-Meteo &#183;
-                    Gaussian 3D</small>
-                <div id="loaderLog">Starting&hellip;</div>
+                <div class="spinner-container">
+                    <div class="spinner"></div>
+                    <div class="spinner-inner"></div>
+                </div>
+                <p>INITIALIZING APEX RADAR STREAM</p>
+                <small
+                    style="color:var(--dim);font-size:.7rem;font-family:'JetBrains Mono';letter-spacing:0.02em">ISOTOPER
+                    PLATFORM v2.6 · MQ-8 CALIBRATION COMPLIANT</small>
+                <div id="loaderLog">Accessing core memory registers&hellip;</div>
             </div>
         </div>
     </div>
 
     <div id="statsBar">
-        <div class="stat"><span class="sl">Peak Concentration</span><span class="sv" id="sPeak">&mdash;</span></div>
-        <div class="stat"><span class="sl">X (downwind)</span><span class="sv" id="stX">&mdash;</span></div>
-        <div class="stat"><span class="sl">Y (crosswind)</span><span class="sv" id="stY">&mdash;</span></div>
-        <div class="stat"><span class="sl">Z (view height)</span><span class="sv" id="stZ">&mdash;</span></div>
-        <div class="stat"><span class="sl">H effective</span><span class="sv" id="stH">&mdash;</span></div>
-        <div class="stat"><span class="sl">Wind Speed</span><span class="sv" id="sWind">&mdash;</span></div>
-        <div class="stat"><span class="sl">Wind Direction</span><span class="sv" id="sWindDir">&mdash;</span></div>
-        <div class="stat"><span class="sl">Updated</span><span class="sv" id="sTime">&mdash;</span></div>
+        <div class="stat"><span class="sl">Peak Cloud Concentration</span><span class="sv" id="sPeak">&mdash;</span>
+        </div>
+        <div class="stat"><span class="sl">Max Peak Vector Downwind</span><span class="sv" id="stX">&mdash;</span></div>
+        <div class="stat"><span class="sl">Crosswind Vector Deviation</span><span class="sv" id="stY">&mdash;</span>
+        </div>
+        <div class="stat"><span class="sl">Vertical Capture Plane</span><span class="sv" id="stZ">&mdash;</span></div>
+        <div class="stat"><span class="sl">H Stack Target Baseline</span><span class="sv" id="stH">&mdash;</span></div>
+        <div class="stat"><span class="sl">Stream Velocity</span><span class="sv" id="sWind">&mdash;</span></div>
+        <div class="stat"><span class="sl">True Angle Flow</span><span class="sv" id="sWindDir">&mdash;</span></div>
+        <div class="stat"><span class="sl">Bus Datetime Cycle</span><span class="sv" id="sTime">&mdash;</span></div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <script>
-        // ═══════════════════════════════════════════════════════
-        // GAUSSIAN PLUME — ISOTOPER B15 DRONE · MQ-8 SENSOR
-        // Full 3D (x,y,z) coordinate model
-        // ═══════════════════════════════════════════════════════
+        // =========================================================================
+        // CORE AVIONICS CALCULATION MODEL — GAUSSIAN DISPERSION INVERSION MATRIX
+        // =========================================================================
 
-        // ── Pasquill-Gifford sigma parameters (power-law) ──
-        // σy = ay * x^by,  σz = az * x^bz  (x in metres)
         const PG = {
             A: { ay: 0.22, by: 0.9, az: 0.20, bz: 0.9 },
             B: { ay: 0.16, by: 0.9, az: 0.12, bz: 0.9 },
@@ -1822,24 +1572,20 @@
         };
 
         const WMO = {
-            0: 'Clear', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'Overcast', 45: 'Fog',
-            51: 'Light drizzle', 61: 'Light rain', 63: 'Rain', 65: 'Heavy rain', 80: 'Showers', 95: 'Thunderstorm'
+            0: 'Clear', 1: 'Mainly Clear', 2: 'Scattered', 3: 'Overcast', 45: 'Rad Fog',
+            51: 'Light Drizzle', 61: 'Light Rain', 63: 'Rain Vol', 65: 'Heavy Rain', 80: 'Showers', 95: 'T-Storm Active'
         };
         const DIR_NAMES = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
-
-        // Conversion Constant: Hydrogen (H2) PPM to µg/m³ at standard room temp/pressure
         const PPM_TO_UGM3_H2 = 82.4;
 
-        // ── State ──
-        let SRC = { lat: 23.0942, lon: 90.0157, alt: 30 };   // drone position
-        let W = { U: 2.6, WD: 315, temp: 28, hum: 28, code: 0 }; // weather
+        let SRC = { lat: 23.0942, lon: 90.0157, alt: 30 };
+        let W = { U: 2.6, WD: 315, temp: 28, hum: 28, code: 0 };
         let AQ = {};
-        let windMode = 'live';    // 'live' | 'manual'
+        let windMode = 'live';
         let plumeCache = null;
         let droneMarker = null;
         let pickingMode = false;
 
-        // ── Leaflet init ──
         delete L.Icon.Default.prototype._getIconUrl;
         L.Icon.Default.mergeOptions({ iconUrl: '', iconRetinaUrl: '', shadowUrl: '' });
 
@@ -1851,13 +1597,13 @@
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
             { subdomains: 'abcd', maxZoom: 19 }).addTo(map);
         L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-            { maxZoom: 19, opacity: 0.18 }).addTo(map);
+            { maxZoom: 19, opacity: 0.15 }).addTo(map);
         L.control.zoom({ position: 'bottomright' }).addTo(map);
         L.control.attribution({ position: 'bottomright', prefix: 'CartoDB/Esri/Open-Meteo' }).addTo(map);
 
         function makeDroneIcon() {
             return L.divIcon({
-                html: '<div style="width:16px;height:16px;border-radius:50%;background:#ff4488;border:2px solid #fff;box-shadow:0 0 18px #ff4488,0 0 6px rgba(255,68,136,.8)"></div>',
+                html: '<div class="drone-marker-pulsing" style="width:16px;height:16px;border-radius:50%;background:var(--drone);border:2px solid #fff;box-shadow:0 0 18px var(--drone);"></div>',
                 iconSize: [16, 16], iconAnchor: [8, 8], className: ''
             });
         }
@@ -1865,12 +1611,11 @@
         function placeDroneMarker() {
             if (droneMarker) droneMarker.remove();
             droneMarker = L.marker([SRC.lat, SRC.lon], { icon: makeDroneIcon(), zIndexOffset: 1000 })
-                .bindTooltip('ISOTOPER B15 · MQ-8 (' + SRC.alt + 'm AGL)', { direction: 'right' })
+                .bindTooltip('ISOTOPER B15 INTERCEPT HUB (' + SRC.alt + 'm AGL)', { direction: 'right' })
                 .addTo(map);
         }
         placeDroneMarker();
 
-        // ── Map click for picking source ──
         map.on('click', function (e) {
             if (!pickingMode) return;
             SRC.lat = +e.latlng.lat.toFixed(6);
@@ -1927,14 +1672,13 @@
 
         function updateDroneHUD() {
             document.getElementById('dronePos').textContent =
-                SRC.lat.toFixed(5) + '\u00b0N  ' + SRC.lon.toFixed(5) + '\u00b0E';
-            document.getElementById('droneAlt').textContent = 'B15 Alt (z): ' + SRC.alt + ' m';
+                SRC.lat.toFixed(5) + '°N  ' + SRC.lon.toFixed(5) + '°E';
+            document.getElementById('droneAlt').textContent = 'ALT STACK: ' + SRC.alt + 'm AGL';
             document.getElementById('srcLatDisp').textContent = SRC.lat.toFixed(6);
             document.getElementById('srcLonDisp').textContent = SRC.lon.toFixed(6);
             document.getElementById('srcAltDisp').textContent = SRC.alt + ' m';
         }
 
-        // ── Wind mode ──
         function setWindMode(mode) {
             windMode = mode;
             document.getElementById('tabLive').classList.toggle('active', mode === 'live');
@@ -1946,11 +1690,6 @@
                 updateUI(); recomputePlume();
             }
         }
-
-        document.getElementById('btnRefresh').addEventListener('click', function () {
-            console.log('Manual refresh clicked');
-            fetchLiveWeather();
-        });
 
         document.getElementById('manWS').addEventListener('input', function () {
             W.U = +this.value;
@@ -1967,45 +1706,32 @@
 
         async function fetchWeatherDirect(url) {
             const response = await fetch(url);
-            if (!response.ok) {
-                throw new Error(`Weather API error: ${response.status} - ${response.statusText}`);
-            }
+            if (!response.ok) throw new Error(`Weather system telemetry breach: ${response.status}`);
             return await response.json();
         }
 
         function adcToPPM(adc, Ro, RL) {
-            // FIX: ESP32 uses a 3.3V reference and 12-bit (4095) resolution
             var v = adc * (3.3 / 4095.0);
             if (v < 0.001) return 0;
-
-            // The physical MQ-8 hardware circuit still operates on 5V
             var Vc = 5.0;
             var Rs = ((Vc - v) / v) * RL;
             var ratio = Rs / Ro;
-
             return Math.max(0, 987.99 * Math.pow(Math.max(ratio, 0.001), -2.162));
         }
 
-        // ── LIVE APPS SCRIPT MQ-8 DATA FETCH ──
         async function fetchSheetData() {
-            // Your direct Google Apps Script URL
             const scriptURL = "https://script.google.com/macros/s/AKfycbyfaKegzXJITJhS6Po5G0ir-y6ikMA1xN4rc3Oo3CEObOC9700473MPbuTnazip3fCn/exec";
-
-            document.getElementById('sheetStatus').textContent = 'Fetching live MQ-8 data...';
+            document.getElementById('sheetStatus').textContent = 'Synchronizing sensor array registers...';
 
             try {
                 const response = await fetch(scriptURL);
                 const data = await response.json();
 
-                // Check for the error format your API uses
                 if (data.error) throw new Error(data.error);
                 if (!data.latest) throw new Error('Missing "latest" data object from API');
 
-                // Extract the data using the exact keys from your snippet!
                 const env = data.latest;
                 const adc = parseFloat(env.h2_raw);
-
-                // If your API doesn't send wind yet, it safely falls back to the manual UI sliders
                 const ws = parseFloat(env.ws || env.wind_speed || W.U);
                 const wd = parseFloat(env.wd || env.wind_direction || W.WD);
 
@@ -2014,42 +1740,33 @@
                 const Ro = parseFloat(document.getElementById('mq8Ro').value) || 10;
                 const RL = parseFloat(document.getElementById('mq8RL').value) || 10;
 
-                // 1. Convert ADC to Voltage and Rs/Ro (FIXED FOR ESP32)
                 const volt = adc * (3.3 / 4095.0);
                 const Rs = ((5.0 - volt) / volt) * RL;
                 const ratio = Rs / Ro;
-
-                // 2. Convert Ratio to PPM 
                 const ppm = adcToPPM(adc, Ro, RL);
-
-                // 3. Convert PPM to Concentration (µg/m³)
                 const C_ug_m3 = ppm * PPM_TO_UGM3_H2;
 
-                // Update the UI
                 document.getElementById('mq8ADC').textContent = adc.toFixed(0);
                 document.getElementById('mq8Volt').textContent = volt.toFixed(3) + ' V';
                 document.getElementById('mq8RsRo').textContent = ratio.toFixed(3);
                 document.getElementById('mq8PPM').textContent = ppm.toFixed(2) + ' ppm';
-                document.getElementById('sheetStatus').textContent = `Live: ${C_ug_m3.toFixed(2)} µg/m³ H₂`;
+                document.getElementById('sheetStatus').textContent = `Bound: ${C_ug_m3.toFixed(2)} µg/m³ H₂`;
 
-                // Update wind if provided by the sheet
                 if (!isNaN(ws) && !isNaN(wd) && windMode === 'live') {
                     W.U = ws;
                     W.WD = wd;
                 }
 
-                // 4. Calculate dynamic Q and redraw the plume
                 updateDynamicQ(C_ug_m3);
                 updateUI();
                 recomputePlume();
 
             } catch (err) {
-                console.error("Apps Script Fetch Error:", err);
-                document.getElementById('sheetStatus').textContent = 'API Error: ' + err.message;
+                console.error("Apps Script Integration Fault:", err);
+                document.getElementById('sheetStatus').textContent = 'Fault: ' + err.message;
             }
         }
 
-        // ── FULL GAUSSIAN INVERSION TO FIND Q ──
         function updateDynamicQ(C_ug_m3) {
             if (C_ug_m3 <= 0) return;
 
@@ -2057,26 +1774,20 @@
             const stab = document.getElementById('stability').value;
             const U = Math.max(W.U, 0.2);
 
-            // Measure parameters relative to the source
-            // We assume the sensor is 1 meter downwind to prevent divide-by-zero
             const x_measure = 1.0;
             const y_measure = 0.0;
             const z_measure = SRC.alt;
 
             const { sy, sz } = getSigmas(x_measure, stab);
 
-            // Calculate Dispersion Factor (D)
             const expY = Math.exp(-(y_measure * y_measure) / (2 * sy * sy));
             const expZ1 = Math.exp(-((z_measure - H) * (z_measure - H)) / (2 * sz * sz));
             const expZ2 = Math.exp(-((z_measure + H) * (z_measure + H)) / (2 * sz * sz));
             const D = (1 / (2 * Math.PI * sy * sz * U)) * expY * (expZ1 + expZ2);
 
-            // Invert the equation: Q = C / D
-            // C is in µg/m³, so Q_ug_s is in µg/s. Convert to kg/s for the UI.
             const Q_ug_s = C_ug_m3 / D;
             const Q_kg_s = Q_ug_s * 1e-9;
 
-            // Dynamically adjust the Q slider limits
             const qSlider = document.getElementById('Q');
             if (Q_kg_s > parseFloat(qSlider.max)) qSlider.max = (Q_kg_s * 1.5).toFixed(5);
             if (Q_kg_s < parseFloat(qSlider.min)) qSlider.min = (Q_kg_s * 0.5).toFixed(5);
@@ -2088,7 +1799,7 @@
         async function fetchLiveWeather() {
             if (windMode === 'manual') return;
             document.getElementById('loader').style.display = 'flex';
-            document.getElementById('hudST').textContent = '● FETCHING…';
+            document.getElementById('hudST').textContent = 'SCANNING...';
             document.getElementById('hudST').style.color = 'var(--yellow)';
             document.getElementById('btnRefresh').disabled = true;
 
@@ -2100,14 +1811,14 @@
                 '&longitude=' + SRC.lon + '&current=pm10,pm2_5,nitrogen_dioxide,carbon_monoxide,ozone,european_aqi';
 
             try {
-                log('Fetching live weather data for Dhaka (' + SRC.lat.toFixed(4) + ', ' + SRC.lon.toFixed(4) + ')…');
+                log('Intercepting meteorological frames for Dhaka (' + SRC.lat.toFixed(4) + ', ' + SRC.lon.toFixed(4) + ')…');
 
                 const [fData, aqJson] = await Promise.all([
                     fetchWeatherDirect(fURL).catch(e => { return { current: {} }; }),
                     fetchWeatherDirect(aqURL).catch(e => { return { current: {} }; })
                 ]);
 
-                log('Processing weather data…');
+                log('Injecting environmental telemetry parameters into plume engine…');
                 const cur = fData.current || {};
 
                 const newWindSpeed = typeof cur.wind_speed_10m === 'number' ? cur.wind_speed_10m : W.U;
@@ -2134,14 +1845,14 @@
 
                 const now = new Date().toLocaleTimeString('en-BD', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
                 document.getElementById('sTime').textContent = now;
-                document.getElementById('hudTime').textContent = 'Updated ' + now;
-                document.getElementById('hudST').textContent = '● LIVE';
+                document.getElementById('hudTime').textContent = 'Synchronized ' + now;
+                document.getElementById('hudST').textContent = 'ONLINE';
                 document.getElementById('hudST').style.color = 'var(--green)';
 
             } catch (err) {
-                console.error('Weather fetch error:', err);
-                log('⚠ ' + err.message.substring(0, 60) + ' — using defaults');
-                document.getElementById('hudST').textContent = '⚠ FALLBACK';
+                console.error('Sensor connection dropped:', err);
+                log('⚠ Telemetry fault recovery loop active — executing safe defaults');
+                document.getElementById('hudST').textContent = 'FALLBACK';
                 document.getElementById('hudST').style.color = 'var(--orange)';
                 updateUI();
                 recomputePlume();
@@ -2151,69 +1862,74 @@
             document.getElementById('btnRefresh').disabled = false;
         }
 
-        // ── UI ──
         const dirN = d => DIR_NAMES[Math.round(d / 22.5) % 16];
         const fmt = (v, u, dp = 1) => (v != null) ? v.toFixed(dp) + ' ' + u : 'N/A';
-        const aqiC = v => !v ? 'var(--text)' : v < 20 ? 'var(--green)' : v < 40 ? '#aaff44' : v < 60 ? 'var(--yellow)' : v < 80 ? 'var(--orange)' : 'var(--red)';
+        const aqiC = v => !v ? 'var(--text)' : v < 20 ? 'var(--green)' : v < 40 ? '#10b981' : v < 60 ? 'var(--yellow)' : v < 80 ? 'var(--orange)' : 'var(--red)';
 
         function updateUI() {
             const U = W.U, WD = W.WD;
             const plumeToward = (WD + 180) % 360;
             document.getElementById('lcWind').textContent = U.toFixed(1) + ' m/s' + (W.gust ? ' (g:' + W.gust.toFixed(1) + ')' : '');
-            document.getElementById('lcDir').textContent = WD + '\u00b0 FROM ' + dirN(WD);
-            document.getElementById('lcPlumeDir').textContent = plumeToward + '\u00b0 TO ' + dirN(plumeToward);
-            document.getElementById('lcTemp').textContent = fmt(W.temp, '\u00b0C');
+            document.getElementById('lcDir').textContent = WD + '° FROM ' + dirN(WD);
+            document.getElementById('lcPlumeDir').textContent = plumeToward + '° TO ' + dirN(plumeToward);
+            document.getElementById('lcTemp').textContent = fmt(W.temp, '°C');
             document.getElementById('lcHum').textContent = fmt(W.hum, '%', 0);
             document.getElementById('lcCode').textContent = WMO[W.code] || ('Code ' + W.code);
-            document.getElementById('aqPm25').textContent = fmt(AQ.pm25, '\u03bcg/m\u00b3');
-            document.getElementById('aqPm10').textContent = fmt(AQ.pm10, '\u03bcg/m\u00b3');
-            document.getElementById('aqNo2').textContent = fmt(AQ.no2, '\u03bcg/m\u00b3');
+            document.getElementById('aqPm25').textContent = fmt(AQ.pm25, 'µg/m³');
+            document.getElementById('aqPm10').textContent = fmt(AQ.pm10, 'µg/m³');
+            document.getElementById('aqNo2').textContent = fmt(AQ.no2, 'µg/m³');
             const ae = document.getElementById('aqAqi');
             ae.textContent = AQ.aqi ?? 'N/A'; ae.style.color = aqiC(AQ.aqi);
+
             document.getElementById('wstrip').innerHTML =
-                '<span>Wind <span class="wv">' + U.toFixed(1) + ' m/s ' + dirN(WD) + '</span></span>' +
-                '<span>&#8599; <span class="wv">' + plumeToward + '\u00b0 ' + dirN(plumeToward) + '</span></span>' +
-                '<span>T <span class="wv">' + W.temp.toFixed(1) + '\u00b0C</span></span>' +
-                '<span>RH <span class="wv">' + W.hum + '%</span></span>' +
-                '<span>' + (WMO[W.code] || W.code) + '</span>' +
-                '<span>AQI <span class="wv" style="color:' + aqiC(AQ.aqi) + '">' + (AQ.aqi || '\u2014') + '</span></span>';
+                '<span>Wind: <span class="wv">' + U.toFixed(1) + ' m/s ' + dirN(WD) + '</span></span>' +
+                '<span>➔ <span class="wv">' + plumeToward + '° ' + dirN(plumeToward) + '</span></span>' +
+                '<span>Temp: <span class="wv">' + W.temp.toFixed(1) + '°C</span></span>' +
+                '<span>RH: <span class="wv">' + W.hum + '%</span></span>' +
+                '<span>Forecast: <span class="wv">' + (WMO[W.code] || W.code) + '</span></span>' +
+                '<span>AQI: <span class="wv" style="color:' + aqiC(AQ.aqi) + '">' + (AQ.aqi || '—') + '</span></span>';
+
             document.getElementById('sWind').textContent = U.toFixed(2) + ' m/s';
-            document.getElementById('sWindDir').textContent = WD + '\u00b0 FROM ' + dirN(WD);
+            document.getElementById('sWindDir').textContent = WD + '° FROM ' + dirN(WD);
             drawCompass(WD);
-            document.getElementById('hudWT').textContent = 'Wind: ' + U.toFixed(1) + ' m/s FROM ' + dirN(WD) + ' (' + WD + '\u00b0)';
+            document.getElementById('hudWT').textContent = 'Vector Flow: ' + U.toFixed(1) + ' m/s FROM ' + dirN(WD) + ' (' + WD + '°)';
         }
 
-        // ── Compass ──
         function drawCompass(wd) {
             const cv = document.getElementById('compass');
             const ctx = cv.getContext('2d');
             ctx.clearRect(0, 0, 54, 54);
             const cx = 27, cy = 27, r = 21;
-            ctx.strokeStyle = '#112233'; ctx.lineWidth = 1.5;
+
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+
+            ctx.strokeStyle = isDark ? '#4B5563' : '#9CA3AF'; ctx.lineWidth = 1.5;
             ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2 * Math.PI); ctx.stroke();
+
             for (let i = 0; i < 8; i++) {
                 const a = i * Math.PI / 4;
-                ctx.strokeStyle = '#1a3050'; ctx.lineWidth = 1; ctx.beginPath();
+                ctx.strokeStyle = isDark ? '#6B7280' : '#6B7280'; ctx.lineWidth = 1; ctx.beginPath();
                 ctx.moveTo(cx + Math.sin(a) * (r - 4), cy - Math.cos(a) * (r - 4));
                 ctx.lineTo(cx + Math.sin(a) * r, cy - Math.cos(a) * r); ctx.stroke();
             }
-            ctx.fillStyle = '#2a4060'; ctx.font = '6px monospace'; ctx.textAlign = 'center';
+            ctx.fillStyle = isDark ? '#9CA3AF' : '#374151'; ctx.font = '7px "JetBrains Mono"'; ctx.textAlign = 'center';
             ctx.fillText('N', cx, cy - r + 8); ctx.fillText('S', cx, cy + r - 1);
-            ctx.fillText('E', cx + r - 1, cy + 3); ctx.fillText('W', cx - r + 1, cy + 3);
+
             const fr = wd * Math.PI / 180, a = 15;
-            ctx.strokeStyle = '#ff7700'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+
+            ctx.strokeStyle = '#ea580c'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
             ctx.beginPath();
             ctx.moveTo(cx - Math.sin(fr) * a, cy - Math.cos(fr) * a);
             ctx.lineTo(cx + Math.sin(fr) * a, cy + Math.cos(fr) * a);
             ctx.stroke();
+
             const tx = cx + Math.sin(fr) * a, ty = cy + Math.cos(fr) * a;
-            ctx.fillStyle = '#ff7700';
-            ctx.beginPath(); ctx.arc(tx, ty, 3, 0, 2 * Math.PI); ctx.fill();
-            ctx.fillStyle = '#ffffff33';
-            ctx.beginPath(); ctx.arc(cx, cy, 1.5, 0, 2 * Math.PI); ctx.fill();
+            ctx.fillStyle = '#ea580c';
+            ctx.beginPath(); ctx.arc(tx, ty, 3.5, 0, 2 * Math.PI); ctx.fill();
+            ctx.fillStyle = 'rgba(255,255,255,0.2)';
+            ctx.beginPath(); ctx.arc(cx, cy, 2, 0, 2 * Math.PI); ctx.fill();
         }
 
-        // ── Gaussian 3D concentration ──
         function getSigmas(x, stab) {
             const p = PG[stab] || PG.D;
             const sy = p.ay * Math.pow(x, p.by);
@@ -2228,22 +1944,21 @@
             const coeff = Q / (2 * Math.PI * sy * sz * Math.max(U, 0.2));
             const expY = Math.exp(-(y * y) / (2 * sy * sy));
             const expZ1 = Math.exp(-((z - H) * (z - H)) / (2 * sz * sz));
-            const expZ2 = Math.exp(-((z + H) * (z + H)) / (2 * sz * sz));
-            return coeff * expY * (expZ1 + expZ2) * 1e9; // µg/m³
+            const expZ2_correct = Math.exp(-((z + H) * (z + H)) / (2 * sz * sz));
+            return coeff * expY * (expZ1 + expZ2_correct) * 1e9;
         }
 
-        // ── Color map ──
         function heatColor(t) {
             const stops = [
-                [0, 4, 4, 30],
-                [0.12, 0, 30, 140],
-                [0.26, 0, 100, 220],
-                [0.40, 0, 210, 190],
-                [0.54, 79, 255, 80],
-                [0.68, 200, 255, 0],
-                [0.80, 255, 150, 0],
-                [0.91, 255, 50, 0],
-                [1.0, 255, 0, 50],
+                [0, 15, 23, 42],
+                [0.12, 30, 41, 59],
+                [0.26, 14, 116, 144],
+                [0.40, 6, 182, 212],
+                [0.54, 16, 185, 129],
+                [0.68, 132, 204, 22],
+                [0.80, 245, 158, 11],
+                [0.91, 239, 68, 68],
+                [1.0, 225, 29, 72],
             ];
             t = Math.max(0, Math.min(1, t));
             let i = 0;
@@ -2254,7 +1969,6 @@
             Math.round(lo[3] + f * (hi[3] - lo[3]))];
         }
 
-        // ── Plume render ──
         function recomputePlume() {
             const canvas = document.getElementById('plumeCanvas');
             const wrap = document.getElementById('mapWrap');
@@ -2282,7 +1996,7 @@
             const srcPt = map.latLngToContainerPoint([SRC.lat, SRC.lon]);
             const mpp = 40075016.686 * Math.cos(SRC.lat * Math.PI / 180) / Math.pow(2, map.getZoom() + 8);
 
-            const SCALE = 3;
+            const SCALE = 2;
             const NW = Math.ceil(CW / SCALE);
             const NH = Math.ceil(CH / SCALE);
             const grid = new Float32Array(NW * NH);
@@ -2317,7 +2031,7 @@
                 imgData.data[i * 4] = r;
                 imgData.data[i * 4 + 1] = g;
                 imgData.data[i * 4 + 2] = b;
-                imgData.data[i * 4 + 3] = Math.round(t * 240 * opac);
+                imgData.data[i * 4 + 3] = Math.round(t * 255 * opac);
             }
 
             const off = new OffscreenCanvas(NW, NH);
@@ -2331,13 +2045,13 @@
             const xMax = H > 0 ? Math.pow(H / (Math.sqrt(2) * stP.az), 1 / stP.bz) : 200;
             const { sy: syMax, sz: szMax } = getSigmas(Math.max(xMax, 1), stab);
 
-            document.getElementById('sPeak').textContent = maxC.toFixed(3) + ' \u03bcg/m\u00b3';
-            document.getElementById('stX').textContent = peakX > 0 ? peakX.toFixed(0) + ' m' : '\u2014';
+            document.getElementById('sPeak').textContent = maxC.toFixed(3) + ' µg/m³';
+            document.getElementById('stX').textContent = peakX > 0 ? peakX.toFixed(0) + ' m' : '—';
             document.getElementById('stY').textContent = peakY.toFixed(0) + ' m';
             document.getElementById('stZ').textContent = zReceptor + ' m';
             document.getElementById('stH').textContent = H.toFixed(1) + ' m';
 
-            document.getElementById('axX').textContent = peakX > 0 ? peakX.toFixed(0) + ' m' : '\u2014';
+            document.getElementById('axX').textContent = peakX > 0 ? peakX.toFixed(0) + ' m' : '—';
             document.getElementById('axY').textContent = peakY.toFixed(0) + ' m';
             document.getElementById('axZ').textContent = zReceptor + ' m AGL';
             document.getElementById('sSy').textContent = syMax.toFixed(1) + ' m';
@@ -2351,11 +2065,10 @@
             document.getElementById('scT1').textContent = (maxC * 0.25).toFixed(2);
         }
 
-        // ── Map events ──
         map.on('mousemove', function (e) {
             const pt = map.latLngToContainerPoint(e.latlng);
             document.getElementById('coordTxt').textContent =
-                e.latlng.lat.toFixed(5) + '\u00b0N  ' + e.latlng.lng.toFixed(5) + '\u00b0E';
+                e.latlng.lat.toFixed(5) + '°N  ' + e.latlng.lng.toFixed(5) + '°E';
 
             if (!plumeCache) return;
             const d = plumeCache;
@@ -2370,16 +2083,15 @@
                 const zw = parseFloat(document.getElementById('Zslice').value);
                 const tip = document.getElementById('tooltip');
                 tip.style.display = 'block';
-                tip.style.left = (pt.x + 14) + 'px';
+                tip.style.left = (pt.x + 16) + 'px';
                 tip.style.top = (pt.y - 12) + 'px';
                 tip.innerHTML = 'x=<em>' + xw.toFixed(0) + 'm</em> y=<em>' + yw.toFixed(0) +
-                    'm</em> z=<em>' + zw + 'm</em><br>C=<em>' + c.toFixed(4) + ' \u03bcg/m\u00b3</em>';
+                    'm</em> z=<em>' + zw + 'm</em><br>Density=<em>' + c.toFixed(4) + ' µg/m³</em>';
             }
         });
         map.on('mouseout', () => { document.getElementById('tooltip').style.display = 'none'; });
         map.on('moveend zoomend', recomputePlume);
 
-        // ── Control bindings ──
         function bindSlider(id, lid, fmt) {
             const el = document.getElementById(id);
             const ll = document.getElementById(lid);
@@ -2403,8 +2115,7 @@
             document.getElementById('lH').textContent = this.value;
         });
 
-        // ── Theme Toggle ──
-        let currentTheme = 'light';
+        let currentTheme = 'dark'; // Starting theme
 
         function toggleTheme() {
             currentTheme = currentTheme === 'light' ? 'dark' : 'light';
@@ -2413,25 +2124,25 @@
             const btn = document.getElementById('btnTheme');
             if (currentTheme === 'dark') {
                 btn.innerHTML = '☀️ Light Mode';
-                btn.style.borderColor = 'var(--yellow)';
-                btn.style.color = 'var(--yellow)';
+                btn.style.borderColor = 'var(--border)';
+                btn.style.color = 'var(--text-heading)';
             } else {
                 btn.innerHTML = '🌙 Dark Mode';
                 btn.style.borderColor = 'var(--accent)';
                 btn.style.color = 'var(--accent)';
             }
             localStorage.setItem('theme', currentTheme);
+            if (typeof W !== 'undefined' && W.WD !== undefined) drawCompass(W.WD);
         }
 
         function initTheme() {
-            const savedTheme = localStorage.getItem('theme') || 'light';
-            if (savedTheme === 'dark') {
-                currentTheme = 'light';
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            if (savedTheme === 'light') {
+                currentTheme = 'dark'; // Trick it so the toggle triggers correctly
                 toggleTheme();
             }
         }
 
-        // ── Init ──
         window.addEventListener('load', () => {
             initTheme();
             updateDroneHUD();
@@ -2440,13 +2151,11 @@
 
             setInterval(() => {
                 document.getElementById('hudTime').textContent =
-                    'Live · ' + new Date().toLocaleTimeString('en-BD', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    'System Sync · ' + new Date().toLocaleTimeString('en-BD', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
             }, 1000);
 
             setInterval(() => {
-                if (windMode === 'live') {
-                    fetchLiveWeather();
-                }
+                if (windMode === 'live') fetchLiveWeather();
             }, 5 * 60 * 1000);
 
             setTimeout(() => { recomputePlume(); }, 1000);
