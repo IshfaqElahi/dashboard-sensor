@@ -14,7 +14,6 @@
 The dashboard is built on a lightweight, highly optimized client-side architecture designed for rapid deployment and zero-latency UI updates in the field.
 * **Core:** HTML5, CSS3, Vanilla JavaScript (ES6+).
 * **Styling Engine:** Custom CSS Variables, Flexbox/Grid architecture, smooth `cubic-bezier` hardware-accelerated animations, and dynamic theme toggling.
-* **Typography:** *Space Grotesk* (Structure & Headings), *Inter* (Readability), *Geist Mono* (Telemetry & Hard Data).
 * **CI/CD:** Automated static deployment pipeline via GitHub Actions.
 
 ### Data & Analytics
