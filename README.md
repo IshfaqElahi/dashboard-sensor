@@ -1,4 +1,4 @@
-# 🛰️ ISOTOPER B15: Core Telemetry & Spatial Analysis Framework
+# ISOTOPER B15: Core Telemetry & Spatial Analysis Framework
 
 ## 📝 Overview
 **ISOTOPER B15** is an advanced, real-time web dashboard designed to visualize critical telemetry and environmental data intercepted by specialized UAV hardware. Engineered specifically for the **TEKNOFEST 2026** Robotic System Design competition, this framework processes and maps live atmospheric conditions, hazardous gas concentrations, and radiation dosimetry into a highly responsive, tactical interface.
