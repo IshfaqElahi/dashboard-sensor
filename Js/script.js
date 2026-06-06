@@ -95,9 +95,16 @@ function showError(message) {
 
 // ===== UPDATE DASHBOARD =====
 function updateDashboard() {
-    if (!envData && !radData) return;
-
+    // 1. ALWAYS hide the loader once the attempt is finished
     document.getElementById('loading').style.display = 'none';
+
+    // 2. If BOTH APIs failed, show an error on the screen instead of infinite loading
+    if (!envData && !radData) {
+        showError('CRITICAL FAULT: Unable to establish API handshake. Check F12 Console.');
+        return;
+    }
+
+    // 3. Otherwise, show the dashboard
     document.getElementById('dashboard').style.display = 'block';
 
     if (envData && envData.latest) {
