@@ -30,15 +30,7 @@ dashboard-sensor-main/
 │
 ├── index.html                       # Main Telemetry Dashboard (UI Hub)
 ├── gpm.html                         # Gaussian Dispersion Protocol Engine
-│
-├── css/
-│   ├── styles.css                   # Segmented Dashboard styling & layout
-│   └── gpm-styles.css               # Segmented Plume Engine styling
-│
-├── js/
-│   ├── script.js                    # Segmented Dashboard API logic & Chart.js instances
-│   └── gpm-script.js                # Segmented Plume Engine logic & Leaflet.js mapping
-│
+
 ├── radiation_map_light.py           # Python core script for geospatial data processing
 │
 ├── radiation_map_light.html         # 🔒 Auto-generated Measurement Map (Do not edit manually)
@@ -47,4 +39,4 @@ dashboard-sensor-main/
 └── .github/workflows/
     └── static.yml                   # GitHub Actions CI/CD automated deployment configuration
 
-    System Note: The mapping artifacts (radiation_map_light.html and radiation_dispersion_map.html) are automatically generated and overwritten by the radiation_map_light.py script. To prevent breaking the <iframe> integrations, do not manually segment or edit these two generated files.
+System Note: The mapping artifacts (radiation_map_light.html and radiation_dispersion_map.html) are automatically generated and overwritten by the radiation_map_light.py script. To prevent breaking the <iframe> integrations, do not manually segment or edit these two generated files.
