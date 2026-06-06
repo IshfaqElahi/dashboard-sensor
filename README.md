@@ -28,11 +28,23 @@ Data streams and historical matrices are handled via a robust integration of spe
 ```text
 dashboard-sensor-main/
 │
-├── index.html                       # Main Telemetry Dashboard & UI Hub
+├── index.html                       # Main Telemetry Dashboard (UI Hub)
 ├── gpm.html                         # Gaussian Dispersion Protocol Engine
-├── radiation_map_light.html         # Absolute Node Cartography Map
-├── radiation_dispersion_map.html    # Interpolated Distribution Matrix Map
-├── radiation_map_light.py           # Python script for geospatial data processing
+│
+├── css/
+│   ├── styles.css                   # Segmented Dashboard styling & layout
+│   └── gpm-styles.css               # Segmented Plume Engine styling
+│
+├── js/
+│   ├── script.js                    # Segmented Dashboard API logic & Chart.js instances
+│   └── gpm-script.js                # Segmented Plume Engine logic & Leaflet.js mapping
+│
+├── radiation_map_light.py           # Python core script for geospatial data processing
+│
+├── radiation_map_light.html         # 🔒 Auto-generated Measurement Map (Do not edit manually)
+├── radiation_dispersion_map.html    # 🔒 Auto-generated Interpolated Map (Do not edit manually)
 │
 └── .github/workflows/
-    └── static.yml                   # GitHub Actions automated deployment configuration
+    └── static.yml                   # GitHub Actions CI/CD automated deployment configuration
+
+    System Note: The mapping artifacts (radiation_map_light.html and radiation_dispersion_map.html) are automatically generated and overwritten by the radiation_map_light.py script. To prevent breaking the <iframe> integrations, do not manually segment or edit these two generated files.
