@@ -967,10 +967,235 @@
                 padding-top: 100px;
             }
         }
+
+        /* ------------------------------------------------------------- */
+        /* LOADING SCREEN                                                 */
+        /* ------------------------------------------------------------- */
+        #loading-screen {
+            position: fixed;
+            inset: 0;
+            z-index: 99999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 36px;
+            background: var(--bg-primary);
+            transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.6s;
+        }
+
+        #loading-screen.hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        /* faint scanning grid backdrop, consistent with the HUD aesthetic */
+        #loading-screen::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image:
+                linear-gradient(var(--border-color) 1px, transparent 1px),
+                linear-gradient(90deg, var(--border-color) 1px, transparent 1px);
+            background-size: 42px 42px;
+            opacity: 0.12;
+            mask-image: radial-gradient(circle at center, #000 0%, transparent 75%);
+            -webkit-mask-image: radial-gradient(circle at center, #000 0%, transparent 75%);
+        }
+
+        .loader-core {
+            position: relative;
+            width: 160px;
+            height: 160px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .loader-ring {
+            position: absolute;
+            border-radius: 50%;
+            border: 1.5px solid var(--accent-color);
+            opacity: 0;
+            animation: loader-pulse 2.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+        }
+
+        .loader-ring:nth-child(1) {
+            width: 40%;
+            height: 40%;
+            animation-delay: 0s;
+        }
+
+        .loader-ring:nth-child(2) {
+            width: 40%;
+            height: 40%;
+            animation-delay: 0.6s;
+        }
+
+        .loader-ring:nth-child(3) {
+            width: 40%;
+            height: 40%;
+            animation-delay: 1.2s;
+        }
+
+        @keyframes loader-pulse {
+            0% {
+                width: 30%;
+                height: 30%;
+                opacity: 0.9;
+                box-shadow: 0 0 12px var(--accent-color);
+            }
+
+            100% {
+                width: 100%;
+                height: 100%;
+                opacity: 0;
+                box-shadow: 0 0 0 var(--accent-color);
+            }
+        }
+
+        .loader-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            box-shadow: 0 0 18px var(--accent-color);
+            animation: loader-dot-blink 1.6s ease-in-out infinite;
+        }
+
+        @keyframes loader-dot-blink {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.35;
+                transform: scale(0.8);
+            }
+        }
+
+        .loader-text {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .loader-brand {
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 700;
+            font-size: 2rem;
+            letter-spacing: 0.08em;
+            color: var(--text-primary);
+        }
+
+        .loader-status {
+            font-family: 'Geist Mono', monospace;
+            font-size: 0.85rem;
+            letter-spacing: 0.12em;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .loader-status .dot-anim {
+            display: inline-block;
+            animation: loader-dot-fade 1.4s infinite;
+        }
+
+        .loader-status .dot-anim:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .loader-status .dot-anim:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes loader-dot-fade {
+
+            0%,
+            80%,
+            100% {
+                opacity: 0.2;
+            }
+
+            40% {
+                opacity: 1;
+            }
+        }
+
+        .loader-bar-track {
+            width: 280px;
+            height: 4px;
+            border-radius: 2px;
+            background: var(--border-color);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .loader-bar-fill {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 40%;
+            background: linear-gradient(90deg, transparent, var(--accent-color), transparent);
+            animation: loader-bar-sweep 1.3s ease-in-out infinite;
+            border-radius: 2px;
+        }
+
+        @keyframes loader-bar-sweep {
+            0% {
+                left: -40%;
+            }
+
+            100% {
+                left: 100%;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .loader-core {
+                width: 120px;
+                height: 120px;
+            }
+
+            .loader-brand {
+                font-size: 1.5rem;
+            }
+
+            .loader-status {
+                font-size: 0.7rem;
+            }
+
+            .loader-bar-track {
+                width: 220px;
+            }
+        }
     </style>
 </head>
 
 <body>
+    <div id="loading-screen">
+        <div class="loader-core">
+            <div class="loader-ring"></div>
+            <div class="loader-ring"></div>
+            <div class="loader-ring"></div>
+            <div class="loader-dot"></div>
+        </div>
+        <div class="loader-text">
+            <div class="loader-brand">ISOTOPER B15</div>
+            <div class="loader-status">Establishing telemetry link<span class="dot-anim">.</span><span
+                    class="dot-anim">.</span><span class="dot-anim">.</span></div>
+        </div>
+        <div class="loader-bar-track">
+            <div class="loader-bar-fill"></div>
+        </div>
+    </div>
+
     <nav class="navbar">
         <div class="nav-container">
             <a href="#" class="nav-brand">
@@ -1491,10 +1716,21 @@
             updateDashboard();
         }
 
+        function hideLoadingScreen() {
+            const loader = document.getElementById('loading-screen');
+            if (!loader) return;
+            loader.classList.add('hidden');
+            setTimeout(() => loader.remove(), 700);
+        }
+
         async function init() {
             initTheme();
             await fetchAllData();
+            hideLoadingScreen();
         }
+
+        // Safety net: never let a slow/failed fetch trap the user behind the loader
+        setTimeout(hideLoadingScreen, 6000);
 
         // ===== NAVIGATION =====
         function toggleMenu() {
