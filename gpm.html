@@ -4,205 +4,2163 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPM ENGINE | ISOTOPER</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link
-        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Orbitron:wght@600&display=swap"
-        rel="stylesheet">
+    <title>GAUSSIAN PLUME</title>
+    <link rel="icon" type="image/png" href="/favicongpm.png">
     <style>
-        :root {
-            --bg: #121212;
-            --panel: #1F2937;
-            --text: #E5E7EB;
-            --accent: #38BDF8;
-            --border: #4B5563;
+        /* Leaflet required styles - Core Map Architecture */
+        .leaflet-pane,
+        .leaflet-tile,
+        .leaflet-marker-icon,
+        .leaflet-marker-shadow,
+        .leaflet-tile-container,
+        .leaflet-pane>svg,
+        .leaflet-pane>canvas,
+        .leaflet-zoom-box,
+        .leaflet-image-layer,
+        .leaflet-layer {
+            position: absolute;
+            left: 0;
+            top: 0;
         }
 
-        [data-theme="light"] {
-            --bg: #F8F9FA;
-            --panel: #FFFFFF;
-            --text: #1E293B;
-            --accent: #2563EB;
-            --border: #E5E7EB;
-        }
-
-        body {
-            margin: 0;
-            display: flex;
-            height: 100vh;
-            font-family: 'JetBrains Mono', monospace;
-            background: var(--bg);
-            color: var(--text);
+        .leaflet-container {
             overflow: hidden;
         }
 
-        #sidebar {
-            width: 350px;
-            background: var(--panel);
-            border-right: 1px solid var(--border);
-            padding: 20px;
-            overflow-y: auto;
-            z-index: 100;
-            box-shadow: 10px 0 30px rgba(0, 0, 0, 0.3);
+        .leaflet-tile,
+        .leaflet-marker-icon,
+        .leaflet-marker-shadow {
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            user-select: none;
+            -webkit-user-drag: none;
         }
 
-        #map-container {
+        .leaflet-tile::selection {
+            background: transparent;
+        }
+
+        .leaflet-safari .leaflet-tile {
+            image-rendering: -webkit-optimize-contrast;
+        }
+
+        .leaflet-safari .leaflet-tile-container {
+            width: 1600px;
+            height: 1600px;
+            -webkit-transform-origin: 0 0;
+            transform-origin: 0 0;
+        }
+
+        .leaflet-marker-icon,
+        .leaflet-marker-shadow {
+            display: block;
+        }
+
+        .leaflet-container .leaflet-overlay-pane svg {
+            max-width: none !important;
+            max-height: none !important;
+        }
+
+        .leaflet-container .leaflet-marker-pane img,
+        .leaflet-container .leaflet-shadow-pane img,
+        .leaflet-container .leaflet-tile-pane img,
+        .leaflet-container img.leaflet-image-layer,
+        .leaflet-container .leaflet-tile {
+            max-width: none !important;
+            max-height: none !important;
+            width: auto;
+            padding: 0;
+        }
+
+        .leaflet-container img.leaflet-tile {
+            mix-blend-mode: plus-lighter;
+        }
+
+        .leaflet-container.leaflet-touch-zoom {
+            -ms-touch-action: pan-x pan-y;
+            touch-action: pan-x pan-y;
+        }
+
+        .leaflet-container.leaflet-touch-drag {
+            -ms-touch-action: pinch-zoom;
+            touch-action: none;
+            touch-action: pinch-zoom;
+        }
+
+        .leaflet-container.leaflet-touch-drag.leaflet-touch-zoom {
+            -ms-touch-action: none;
+            touch-action: none;
+        }
+
+        .leaflet-container {
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .leaflet-container a {
+            -webkit-tap-highlight-color: rgba(51, 181, 229, 0.4);
+        }
+
+        .leaflet-tile {
+            filter: inherit;
+            visibility: hidden;
+        }
+
+        .leaflet-tile-loaded {
+            visibility: inherit;
+        }
+
+        .leaflet-zoom-box {
+            width: 0;
+            height: 0;
+            -moz-box-sizing: border-box;
+            box-sizing: border-box;
+            z-index: 800;
+        }
+
+        .leaflet-overlay-pane svg {
+            -moz-user-select: none;
+            user-select: none;
+        }
+
+        .leaflet-pane {
+            z-index: 400;
+        }
+
+        .leaflet-tile-pane {
+            z-index: 200;
+        }
+
+        .leaflet-overlay-pane {
+            z-index: 400;
+        }
+
+        .leaflet-shadow-pane {
+            z-index: 500;
+        }
+
+        .leaflet-marker-pane {
+            z-index: 600;
+        }
+
+        .leaflet-tooltip-pane {
+            z-index: 650;
+        }
+
+        .leaflet-popup-pane {
+            z-index: 700;
+        }
+
+        .leaflet-map-pane canvas {
+            z-index: 100;
+        }
+
+        .leaflet-map-pane svg {
+            z-index: 200;
+        }
+
+        .leaflet-control {
+            position: relative;
+            z-index: 800;
+            pointer-events: auto;
+        }
+
+        .leaflet-top,
+        .leaflet-bottom {
+            position: absolute;
+            z-index: 1000;
+            pointer-events: none;
+        }
+
+        .leaflet-top {
+            top: 0;
+        }
+
+        .leaflet-right {
+            right: 0;
+        }
+
+        .leaflet-bottom {
+            bottom: 0;
+        }
+
+        .leaflet-left {
+            left: 0;
+        }
+
+        .leaflet-control {
+            float: left;
+            clear: both;
+        }
+
+        .leaflet-right .leaflet-control {
+            float: right;
+        }
+
+        .leaflet-top .leaflet-control {
+            margin-top: 10px;
+        }
+
+        .leaflet-bottom .leaflet-control {
+            margin-bottom: 10px;
+        }
+
+        .leaflet-left .leaflet-control {
+            margin-left: 10px;
+        }
+
+        .leaflet-right .leaflet-control {
+            margin-right: 10px;
+        }
+
+        .leaflet-fade-anim .leaflet-popup {
+            opacity: 0;
+            transition: opacity 0.2s linear;
+        }
+
+        .leaflet-fade-anim .leaflet-map-pane .leaflet-popup {
+            opacity: 1;
+        }
+
+        .leaflet-zoom-animated {
+            transform-origin: 0 0;
+        }
+
+        svg.leaflet-zoom-animated {
+            will-change: transform;
+        }
+
+        .leaflet-zoom-anim .leaflet-zoom-animated {
+            transition: transform 0.25s cubic-bezier(0, 0, 0.25, 1);
+        }
+
+        .leaflet-zoom-anim .leaflet-tile,
+        .leaflet-pan-anim .leaflet-tile {
+            transition: none;
+        }
+
+        .leaflet-zoom-anim .leaflet-zoom-hide {
+            visibility: hidden;
+        }
+
+        .leaflet-interactive {
+            cursor: pointer;
+        }
+
+        .leaflet-grab {
+            cursor: grab;
+        }
+
+        .leaflet-crosshair,
+        .leaflet-crosshair .leaflet-interactive {
+            cursor: crosshair;
+        }
+
+        .leaflet-popup-pane,
+        .leaflet-control {
+            cursor: auto;
+        }
+
+        .leaflet-dragging .leaflet-grab,
+        .leaflet-dragging .leaflet-grab .leaflet-interactive,
+        .leaflet-dragging .leaflet-marker-draggable {
+            cursor: grabbing;
+        }
+
+        .leaflet-marker-icon,
+        .leaflet-marker-shadow,
+        .leaflet-image-layer,
+        .leaflet-pane>svg path,
+        .leaflet-tile-container {
+            pointer-events: none;
+        }
+
+        .leaflet-marker-icon.leaflet-interactive,
+        .leaflet-image-layer.leaflet-interactive,
+        .leaflet-pane>svg path.leaflet-interactive,
+        svg.leaflet-image-layer.leaflet-interactive path {
+            pointer-events: auto;
+        }
+    </style>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Orbitron:wght@600;800&display=swap');
+
+        :root {
+            /* Tech-Inspired Light Mode Palette */
+            --bg: #F8F9FA;
+            --panel: #FFFFFF;
+            --panel-card: #F3F4F6;
+            --border: #E5E7EB;
+            --accent: #2563EB;
+            --accent-glow: rgba(37, 99, 235, 0.15);
+            --red: #EF4444;
+            --orange: #F97316;
+            --yellow: #F59E0B;
+            --green: #10B981;
+            --dim: #6B7280;
+            --text: #1E293B;
+            --text-heading: #111827;
+            --drone: #E11D48;
+            --glass: rgba(255, 255, 255, 0.85);
+            --shadow: 0 4px 20px -2px rgba(17, 24, 39, 0.05), 0 2px 8px -1px rgba(17, 24, 39, 0.03);
+            --radius-lg: 12px;
+            --radius-md: 8px;
+            --font-main: 'Plus Jakarta Sans', -apple-system, sans-serif;
+        }
+
+        [data-theme="dark"] {
+            /* Tech-Inspired Dark Mode Palette */
+            --bg: #121212;
+            --panel: #1F2937;
+            --panel-card: #374151;
+            --border: #4B5563;
+            --accent: #38BDF8;
+            --accent-glow: rgba(56, 189, 248, 0.2);
+            --red: #F87171;
+            --orange: #FB923C;
+            --yellow: #FBBF24;
+            --green: #34D399;
+            --dim: #9CA3AF;
+            --text: #E5E7EB;
+            --text-heading: #F3F4F6;
+            --drone: #FB7185;
+            --glass: rgba(31, 41, 55, 0.85);
+            --shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.6);
+        }
+
+        /* UNIVERSAL SMOOTH TRANSITIONS */
+        body,
+        #topbar,
+        #sidebar,
+        .sb-sec,
+        .card,
+        .src-editor,
+        .wind-override,
+        .axis-box,
+        .coord-input,
+        select,
+        .tab,
+        #statsBar,
+        .stat,
+        .hud,
+        #tooltip,
+        #loader,
+        .leaflet-container,
+        .leaflet-control-zoom a,
+        .leaflet-control-attribution {
+            transition-property: background-color, background, color, border-color, box-shadow;
+            transition-duration: 0.6s;
+            transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            letter-spacing: -0.01em;
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 20px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--dim);
+        }
+
+        /* TOPBAR UI */
+        #topbar {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 0 24px;
+            height: 64px;
+            background: var(--panel);
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+            box-shadow: var(--shadow);
+            z-index: 100;
+        }
+
+        .logo {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: var(--text-heading);
+            white-space: nowrap;
+            letter-spacing: .05em;
+            background: linear-gradient(90deg, var(--accent), var(--drone));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .chip {
+            font-size: .72rem;
+            padding: 5px 12px;
+            border: 1px solid transparent;
+            border-radius: var(--radius-md);
+            white-space: nowrap;
+            letter-spacing: .02em;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .chip-g {
+            border-color: rgba(16, 185, 129, 0.3);
+            color: var(--green);
+            background: rgba(16, 185, 129, 0.08);
+        }
+
+        .chip-o {
+            border-color: rgba(249, 115, 22, 0.3);
+            color: var(--orange);
+            background: rgba(249, 115, 22, 0.08);
+        }
+
+        .chip-r {
+            border-color: rgba(239, 68, 68, 0.4);
+            color: var(--red);
+            background: rgba(239, 68, 68, 0.12);
+        }
+
+        .blink::before {
+            content: '';
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse 1.5s infinite cubic-bezier(0.4, 0, 0.6, 1);
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: .3;
+                transform: scale(0.9);
+            }
+        }
+
+        .wstrip {
             flex: 1;
+            display: flex;
+            gap: 24px;
+            font-size: .8rem;
+            color: var(--dim);
+            align-items: center;
+            font-weight: 500;
+            border-left: 1px solid var(--border);
+            padding-left: 24px;
+            /* FIX: Allow horizontal scrolling instead of squishing */
+            overflow-x: auto;
+            white-space: nowrap;
+            scrollbar-width: none;
+            /* Hides scrollbar in Firefox */
+        }
+
+        /* FIX: Hides scrollbar in Chrome/Safari/Edge */
+        .wstrip::-webkit-scrollbar {
+            display: none;
+        }
+
+        /* FIX: Forces the spans to maintain their full width */
+        .wstrip span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
+        .wv {
+            font-weight: 700;
+            color: var(--text-heading);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .btn {
+            font-family: var(--font-main);
+            font-size: .78rem;
+            padding: 8px 16px;
+            cursor: pointer;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border);
+            background: var(--panel-card);
+            color: var(--text-heading);
+            transition: background-color 0.6s ease, color 0.6s ease, border-color 0.6s ease, transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            white-space: nowrap;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            background: var(--accent-glow);
+            border-color: var(--accent);
+            color: var(--accent);
+            transform: translateY(-1px);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn:disabled {
+            opacity: .4;
+            cursor: not-allowed;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        .btn-r {
+            border-color: rgba(239, 68, 68, 0.3);
+            color: var(--red);
+        }
+
+        .btn-r:hover {
+            background: rgba(239, 68, 68, 0.1);
+            border-color: var(--red);
+            color: var(--red);
+        }
+
+        /* MAIN SYSTEM LAYOUT */
+        #main {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
             position: relative;
         }
 
-        #map {
-            height: 100%;
-            width: 100%;
+        /* TELEMETRY SIDEBAR */
+        #sidebar {
+            width: 320px;
+            flex-shrink: 0;
+            background: var(--panel);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            box-shadow: var(--shadow);
+            z-index: 10;
         }
 
-        .section-title {
-            font-family: 'Orbitron';
-            font-size: 0.7rem;
-            color: var(--accent);
-            letter-spacing: 2px;
-            margin: 20px 0 10px;
+        .sb-sec {
+            padding: 20px;
             border-bottom: 1px solid var(--border);
-            padding-bottom: 5px;
+            animation: fadeInSection 0.4s ease backwards;
         }
 
-        .control-group {
-            margin-bottom: 15px;
+        .sb-sec:nth-child(1) {
+            animation-delay: 0.05s;
         }
 
-        label {
-            font-size: 0.75rem;
-            display: block;
-            margin-bottom: 5px;
-            opacity: 0.8;
+        .sb-sec:nth-child(2) {
+            animation-delay: 0.1s;
         }
 
-        input,
+        .sb-sec:nth-child(3) {
+            animation-delay: 0.15s;
+        }
+
+        .sb-sec:nth-child(4) {
+            animation-delay: 0.2s;
+        }
+
+        @keyframes fadeInSection {
+            from {
+                opacity: 0;
+                transform: translateX(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .sb-t {
+            font-size: .72rem;
+            letter-spacing: .08em;
+            color: var(--dim);
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            font-weight: 700;
+        }
+
+        .card {
+            background: var(--panel-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 12px 16px;
+            font-size: .8rem;
+            margin-bottom: 10px;
+            transition: background-color 0.6s ease, border-color 0.2s ease;
+        }
+
+        .card:hover {
+            border-color: var(--dim);
+        }
+
+        .card:last-child {
+            margin-bottom: 0;
+        }
+
+        .row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+        }
+
+        .row:last-child {
+            border: none;
+            padding-bottom: 0;
+        }
+
+        .row:first-child {
+            padding-top: 0;
+        }
+
+        .row span:first-child {
+            color: var(--dim);
+            font-weight: 500;
+        }
+
+        .rv {
+            font-weight: 700;
+            text-align: right;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text-heading);
+        }
+
+        .rv-g {
+            color: var(--green);
+        }
+
+        .rv-a {
+            color: var(--accent);
+        }
+
+        .rv-o {
+            color: var(--orange);
+        }
+
+        .rv-r {
+            color: var(--red);
+        }
+
+        .rv-d {
+            color: var(--drone);
+        }
+
+        /* HARDWARE FEED SYSTEM PANELS */
+        .src-editor {
+            background: rgba(251, 113, 133, 0.03);
+            border: 1px solid rgba(251, 113, 133, 0.2);
+            border-radius: var(--radius-lg);
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+
+        .src-editor .src-title {
+            font-size: .72rem;
+            color: var(--drone);
+            letter-spacing: .05em;
+            margin-bottom: 12px;
+            font-weight: 700;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .input-row label {
+            font-size: .72rem;
+            color: var(--dim);
+            width: 40px;
+            flex-shrink: 0;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .coord-input {
+            flex: 1;
+            background: var(--panel-card);
+            border: 1px solid var(--border);
+            color: var(--text-heading);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: .8rem;
+            padding: 8px 12px;
+            border-radius: var(--radius-md);
+            outline: none;
+            width: 100%;
+            transition: background-color 0.6s ease, color 0.6s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .coord-input:focus {
+            border-color: var(--accent);
+            background: var(--panel);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        .coord-input.invalid {
+            border-color: var(--red);
+            background: rgba(239, 68, 68, 0.05);
+            color: var(--red);
+        }
+
+        .wind-override {
+            background: rgba(249, 115, 22, 0.03);
+            border: 1px solid rgba(249, 115, 22, 0.2);
+            border-radius: var(--radius-lg);
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+
+        .wind-override .wo-title {
+            font-size: .72rem;
+            color: var(--orange);
+            letter-spacing: .05em;
+            margin-bottom: 12px;
+            font-weight: 700;
+        }
+
+        .wind-override .mode-tabs {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 14px;
+            background: var(--panel-card);
+            padding: 4px;
+            border-radius: var(--radius-md);
+        }
+
+        .tab {
+            flex: 1;
+            text-align: center;
+            padding: 8px;
+            font-size: .72rem;
+            cursor: pointer;
+            border: 1px solid transparent;
+            color: var(--dim);
+            border-radius: var(--radius-md);
+            font-weight: 600;
+            transition: background-color 0.6s ease, color 0.6s ease, box-shadow 0.2s ease;
+        }
+
+        .tab.active {
+            border-color: var(--border);
+            color: var(--orange);
+            background: var(--panel);
+            box-shadow: var(--shadow);
+        }
+
+        /* SLIDERS & FORM INPUT CONTROLS */
+        .ctrl {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 14px;
+        }
+
+        .ctrl:last-child {
+            margin-bottom: 0;
+        }
+
+        .ctrl label {
+            font-size: .78rem;
+            color: var(--text);
+            display: flex;
+            justify-content: space-between;
+            font-weight: 500;
+        }
+
+        .ctrl label em {
+            color: var(--accent);
+            font-style: normal;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        input[type=range] {
+            width: 100%;
+            height: 5px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: var(--border);
+            border-radius: 10px;
+            cursor: pointer;
+            outline: none;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--accent);
+            cursor: pointer;
+            border: 2px solid var(--panel);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+            transition: transform 0.1s ease;
+        }
+
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        input[type=range]::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--accent);
+            cursor: pointer;
+            border: 2px solid var(--panel);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+            appearance: none;
+        }
+
         select {
             width: 100%;
-            background: rgba(0, 0, 0, 0.2);
+            background: var(--panel-card);
             border: 1px solid var(--border);
-            color: var(--text);
-            padding: 8px;
-            border-radius: 4px;
+            color: var(--text-heading);
+            padding: 8px 12px;
+            font-family: var(--font-main);
+            font-size: .8rem;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            outline: none;
+            transition: background-color 0.6s ease, color 0.6s ease, border-color 0.2s ease;
         }
 
+        select:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        .scale-bar {
+            height: 14px;
+            border-radius: 4px;
+            margin: 8px 0 6px;
+            background: linear-gradient(to right, #1e293b, #475569, #0ea5e9, #06b6d4, #10b981, #84cc16, #f59e0b, #ef4444);
+        }
+
+        .scale-ticks {
+            display: flex;
+            justify-content: space-between;
+            font-size: .68rem;
+            color: var(--dim);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* VECTOR 3D COORD SYS LABELS */
+        .axis-box {
+            background: var(--panel-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 14px;
+            font-size: .8rem;
+        }
+
+        .axis-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 0;
+        }
+
+        .ax {
+            width: 18px;
+            height: 18px;
+            border-radius: 4px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: .65rem;
+            font-weight: 800;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .ax-x {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--red);
+        }
+
+        .ax-y {
+            background: rgba(56, 189, 248, 0.15);
+            color: var(--accent);
+        }
+
+        .ax-z {
+            background: rgba(52, 211, 153, 0.15);
+            color: var(--green);
+        }
+
+        .axis-desc {
+            color: var(--dim);
+            flex: 1;
+            font-size: .78rem;
+        }
+
+        .axis-val {
+            color: var(--text-heading);
+            font-weight: 700;
+            text-align: right;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* GEOSPATIAL MAP VIEWPORT WRAPPER */
+        #mapWrap {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            background-color: var(--bg);
+            transition: background-color 0.6s ease;
+        }
+
+        #map {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+        }
+
+        #plumeCanvas {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        /* FLIGHT CONTROLLER GLASS HUD OVERLAYS */
         .hud {
             position: absolute;
-            top: 20px;
-            right: 20px;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 15px;
-            border-radius: 8px;
-            border: 1px solid var(--accent);
-            z-index: 1000;
+            z-index: 20;
+            background: var(--glass);
+            border: 1px solid var(--border);
+            padding: 12px 16px;
+            font-size: .78rem;
             pointer-events: none;
-            backdrop-filter: blur(5px);
+            line-height: 1.5;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            animation: hudPop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) backwards;
         }
 
-        .hud-val {
+        @keyframes hudPop {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        #hudW {
+            top: 16px;
+            left: 16px;
+            border-left: 3px solid var(--orange);
+        }
+
+        #hudS {
+            top: 16px;
+            right: 16px;
+            text-align: right;
+            border-right: 3px solid var(--accent);
+        }
+
+        #hudC {
+            bottom: 16px;
+            left: 16px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        #hudDrone {
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            border-left: 3px solid var(--drone);
+            min-width: 220px;
+            animation: hudPopDrone 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) backwards;
+        }
+
+        @keyframes hudPopDrone {
+            from {
+                opacity: 0;
+                transform: translateY(-50%) translateX(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(-50%) translateX(0);
+            }
+        }
+
+        #tooltip {
+            position: absolute;
+            z-index: 30;
+            background: var(--glass);
+            border: 1px solid var(--accent);
+            padding: 10px 14px;
+            font-size: .75rem;
+            pointer-events: none;
+            display: none;
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow);
+            color: var(--text-heading);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            font-family: 'JetBrains Mono', monospace;
+            line-height: 1.5;
+        }
+
+        #tooltip em {
             color: var(--accent);
-            font-weight: bold;
-            font-size: 1.1rem;
+            font-style: normal;
+            font-weight: 700;
+        }
+
+        /* ANALYTICS TERMINAL FOOTER BAR */
+        #statsBar {
+            display: flex;
+            border-top: 1px solid var(--border);
+            background: var(--panel);
+            flex-shrink: 0;
+            box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.05);
+            z-index: 100;
+            overflow-x: auto;
+        }
+
+        .stat {
+            flex: 1;
+            min-width: 140px;
+            padding: 14px 20px;
+            border-right: 1px solid var(--border);
+            font-size: .8rem;
+            transition: background-color 0.2s ease;
+        }
+
+        .stat:hover {
+            background-color: var(--panel-card);
+        }
+
+        .stat:last-child {
+            border-right: none;
+        }
+
+        .stat .sl {
+            color: var(--dim);
+            font-size: .68rem;
+            display: block;
+            margin-bottom: 4px;
+            letter-spacing: .04em;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .stat .sv {
+            color: var(--text-heading);
+            font-weight: 700;
+            font-size: 1rem;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* CRITICAL SYSTEM LOAD OVERLAY */
+        #loader {
+            position: absolute;
+            inset: 0;
+            z-index: 900;
+            background: var(--bg);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            transition: opacity 0.4s ease;
+        }
+
+        .spinner-container {
+            position: relative;
+            width: 64px;
+            height: 64px;
+        }
+
+        .spinner {
+            width: 100%;
+            height: 100%;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin .8s cubic-bezier(0.55, 0.055, 0.675, 0.19) infinite;
+        }
+
+        .spinner-inner {
+            position: absolute;
+            width: 44px;
+            height: 44px;
+            top: 10px;
+            left: 10px;
+            border: 3px solid transparent;
+            border-bottom-color: var(--drone);
+            border-radius: 50%;
+            animation: spin 1.2s cubic-bezier(0.215, 0.610, 0.355, 1) infinite reverse;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        #loader p {
+            font-size: 1rem;
+            color: var(--text-heading);
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+        }
+
+        #loaderLog {
+            font-size: .78rem;
+            color: var(--dim);
+            max-width: 400px;
+            text-align: center;
+            line-height: 1.6;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* UNIFIED LEAFLET MAP GRAPHICS OVERRIDES */
+        .drone-marker-pulsing {
+            position: relative;
+        }
+
+        .drone-marker-pulsing::before {
+            content: '';
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            left: -8px;
+            top: -8px;
+            border-radius: 50%;
+            background: var(--drone);
+            opacity: 0;
+            animation: mapPulse 1.8s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+        }
+
+        @keyframes mapPulse {
+            0% {
+                transform: scale(0.3);
+                opacity: 0;
+            }
+
+            50% {
+                opacity: 0.22;
+            }
+
+            100% {
+                transform: scale(1.8);
+                opacity: 0;
+            }
+        }
+
+        .leaflet-control-zoom {
+            border: none !important;
+            box-shadow: var(--shadow) !important;
+            border-radius: var(--radius-md) !important;
+            overflow: hidden;
+        }
+
+        .leaflet-control-zoom a {
+            background: var(--panel) !important;
+            color: var(--text-heading) !important;
+            border: 1px solid var(--border) !important;
+            transition: background-color 0.2s ease, color 0.2s ease !important;
+            font-family: 'JetBrains Mono', monospace !important;
+        }
+
+        .leaflet-control-zoom a:hover {
+            background: var(--accent) !important;
+            color: #ffffff !important;
+        }
+
+        .leaflet-control-attribution {
+            background: var(--glass) !important;
+            color: var(--dim) !important;
+            font-size: .65rem !important;
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            border-radius: var(--radius-md) 0 0 0;
+            border-top: 1px solid var(--border);
+            border-left: 1px solid var(--border);
+        }
+
+        /* ------------------------------------------------------------- */
+        /* MOBILE RESPONSIVE LAYOUT (Auto stacks gracefully below 900px) */
+        /* ------------------------------------------------------------- */
+        @media (max-width: 900px) {
+            #main {
+                flex-direction: column-reverse;
+            }
+
+            #sidebar {
+                width: 100%;
+                flex: 1;
+                border-right: none;
+                border-top: 1px solid var(--border);
+            }
+
+            #mapWrap {
+                height: 45vh;
+                flex: none;
+                border-bottom: 1px solid var(--border);
+            }
+
+            #topbar {
+                height: auto;
+                padding: 12px 16px;
+                overflow-x: auto;
+                white-space: nowrap;
+            }
+
+            .hud {
+                padding: 8px 10px;
+                font-size: 0.7rem;
+            }
+
+            #hudS {
+                right: 10px;
+                top: 10px;
+            }
+
+            #hudW {
+                left: 10px;
+                top: 10px;
+            }
+
+            #hudDrone {
+                left: 10px;
+                transform: translateY(-30%);
+                min-width: 180px;
+            }
+
+            #hudC {
+                display: none;
+            }
         }
     </style>
 </head>
 
 <body>
-    <div id="sidebar">
-        <h2 style="font-family: 'Orbitron'; color: var(--accent); margin-top: 0;">PLUME ENGINE</h2>
 
-        <div class="section-title">SOURCE PARAMETERS</div>
-        <div class="control-group">
-            <label>Release Height (m)</label>
-            <input type="number" id="Heff" value="30" onchange="recompute()">
-        </div>
-        <div class="control-group">
-            <label>Emission Rate (g/s)</label>
-            <input type="number" id="Q" value="5" onchange="recompute()">
+    <div id="topbar">
+        <div class="logo">ISOTOPER B15</div>
+        <div class="chip chip-r blink">LIVE TELEMETRY</div>
+        <div class="chip chip-o">GAUSSIAN PLUME MODEL</div>
+        <div class="wstrip" id="wstrip"><span>Establishing connection to station stream&hellip;</span></div>
+        <button class="btn" id="btnTheme" onclick="toggleTheme()">☀️ Light Mode</button>
+        <button class="btn" id="btnRefresh" onclick="fetchLiveWeather()">🔄 Synchronize Weather</button>
+        <button class="btn btn-r" onclick="resetDroneToDefault()">↩ Reset Source Core</button>
+    </div>
+
+    <div id="main">
+        <div id="sidebar">
+
+            <div class="sb-sec">
+                <div class="sb-t">Geospatial Target / Source Origin</div>
+                <div class="src-editor">
+                    <div class="src-title">AVIONICS COORD LOCK (MQ-8)</div>
+                    <div class="input-row">
+                        <label>LAT</label>
+                        <input class="coord-input" id="inLat" type="number" step="0.0001" value="23.0942"
+                            placeholder="Latitude">
+                    </div>
+                    <div class="input-row">
+                        <label>LON</label>
+                        <input class="coord-input" id="inLon" type="number" step="0.0001" value="90.0157"
+                            placeholder="Longitude">
+                    </div>
+                    <div class="input-row">
+                        <label>ALT</label>
+                        <input class="coord-input" id="inAlt" type="number" step="1" value="30"
+                            placeholder="B15 altitude (m)">
+                    </div>
+                    <div style="display:flex;gap:6px;margin-top:10px">
+                        <button class="btn" style="flex:1;justify-content: center;"
+                            onclick="applyDronePosition()">Commit Vector</button>
+                        <button class="btn"
+                            style="flex:1;justify-content: center;border-color:var(--yellow);color:var(--yellow)"
+                            onclick="pickFromMap()">Map Intercept</button>
+                    </div>
+                    <div id="pickMsg"
+                        style="display:none;font-size:.7rem;color:var(--yellow);margin-top:8px;text-align:center;font-weight: 500;">
+                        Select grid coordinate directly on canvas</div>
+                </div>
+                <div class="card">
+                    <div class="row"><span>Locked Lat</span><span class="rv rv-d" id="srcLatDisp">23.0942</span></div>
+                    <div class="row"><span>Locked Lon</span><span class="rv rv-d" id="srcLonDisp">90.0157</span></div>
+                    <div class="row"><span>Rel Elevation (z)</span><span class="rv rv-a" id="srcAltDisp">30 m</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sb-sec">
+                <div class="sb-t">Atmospheric Macro-Environment</div>
+                <div class="wind-override">
+                    <div class="wo-title">ANEMOMETER SOURCE INTERFACE</div>
+                    <div class="mode-tabs">
+                        <div class="tab active" id="tabLive" onclick="setWindMode('live')">STATION API</div>
+                        <div class="tab" id="tabManual" onclick="setWindMode('manual')">MANUAL STRAT</div>
+                    </div>
+                    <div id="manualWindPanel" style="display:none">
+                        <div class="ctrl">
+                            <label>Velocity (m/s) <em id="lWS">2.6</em></label>
+                            <input type="range" id="manWS" min="0.1" max="20" step="0.1" value="2.6">
+                        </div>
+                        <div class="ctrl">
+                            <label>Wind Bearing FROM (°) <em id="lWD">315</em></label>
+                            <input type="range" id="manWD" min="0" max="359" step="1" value="315">
+                        </div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="row"><span>Wind Velocity</span><span class="rv rv-a" id="lcWind">&mdash;</span></div>
+                    <div class="row"><span>Origin Vector</span><span class="rv rv-a" id="lcDir">&mdash;</span></div>
+                    <div class="row"><span>Plume Trajectory</span><span class="rv rv-o" id="lcPlumeDir">&mdash;</span>
+                    </div>
+                    <div class="row"><span>Ambient Temp</span><span class="rv rv-g" id="lcTemp">&mdash;</span></div>
+                    <div class="row"><span>Relative Humidity</span><span class="rv rv-g" id="lcHum">&mdash;</span></div>
+                    <div class="row"><span>Current Profile</span><span class="rv rv-g" id="lcCode">&mdash;</span></div>
+                </div>
+            </div>
+
+            <div class="sb-sec">
+                <div class="sb-t">Gaussian 3D System Matrices</div>
+                <div class="axis-box">
+                    <div class="axis-row">
+                        <div class="ax ax-x">X</div>
+                        <div class="axis-desc">Downwind Axis</div>
+                        <div class="axis-val" id="axX">&mdash;</div>
+                    </div>
+                    <div class="axis-row">
+                        <div class="ax ax-y">Y</div>
+                        <div class="axis-desc">Crosswind Drift</div>
+                        <div class="axis-val" id="axY">&mdash;</div>
+                    </div>
+                    <div class="axis-row">
+                        <div class="ax ax-z">Z</div>
+                        <div class="axis-desc">Vertical Gradient</div>
+                        <div class="axis-val" id="axZ">&mdash;</div>
+                    </div>
+                    <div
+                        style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:.65rem;color:var(--dim);font-family:'JetBrains Mono', monospace;line-height:1.4;">
+                        C(x,y,z) = Q/(2πσyσz·U) · exp(-y²/2σy²) · [exp(-(z-H)²/2σz²) + exp(-(z+H)²/2σz²)]
+                    </div>
+                </div>
+                <div class="card" style="margin-top:10px">
+                    <div class="row"><span>σy Lateral Dispersion</span><span class="rv rv-a" id="sSy">&mdash;</span>
+                    </div>
+                    <div class="row"><span>σz Vertical Dispersion</span><span class="rv rv-a" id="sSz">&mdash;</span>
+                    </div>
+                    <div class="row"><span>Effective Core Height (H)</span><span class="rv rv-a" id="sH">&mdash;</span>
+                    </div>
+                    <div class="row"><span>Peak Density Distance</span><span class="rv rv-o" id="sDist">&mdash;</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sb-sec">
+                <div class="sb-t">Local Ambient Air Index</div>
+                <div class="card">
+                    <div class="row"><span>Particulate PM2.5</span><span class="rv rv-g" id="aqPm25">&mdash;</span>
+                    </div>
+                    <div class="row"><span>Particulate PM10</span><span class="rv rv-g" id="aqPm10">&mdash;</span></div>
+                    <div class="row"><span>Nitrogen Dioxide NO₂</span><span class="rv rv-g" id="aqNo2">&mdash;</span>
+                    </div>
+                    <div class="row"><span>European AQI Standard</span><span class="rv" id="aqAqi">&mdash;</span></div>
+                </div>
+            </div>
+
+            <div class="sb-sec">
+                <div class="sb-t">Sensory Node / MQ-8 Core Data</div>
+                <div class="card" style="border-color:rgba(16, 185, 129, 0.4);background: rgba(16, 185, 129, 0.02);">
+                    <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">
+                        <span style="font-size:.7rem;color:var(--dim);font-family:'JetBrains Mono';">R₀(kΩ)</span>
+                        <input id="mq8Ro" class="coord-input" style="padding:4px 8px; text-align:center" value="10"
+                            type="number" step="0.1">
+                        <span style="font-size:.7rem;color:var(--dim);font-family:'JetBrains Mono';">R_L(kΩ)</span>
+                        <input id="mq8RL" class="coord-input" style="padding:4px 8px; text-align:center" value="10"
+                            type="number" step="0.1">
+                    </div>
+                    <button class="btn"
+                        style="width:100%;justify-content: center;background: var(--accent);color:#fff;border-color:var(--accent)"
+                        onclick="fetchSheetData()">Request Core Bus Sync</button>
+                    <div id="sheetStatus"
+                        style="font-size:.7rem;color:var(--dim);margin-top:8px;text-align:center;font-weight: 500;">Node
+                        unbound</div>
+                </div>
+                <div class="card">
+                    <div class="row"><span>Raw Quantized ADC</span><span class="rv rv-a" id="mq8ADC">---</span></div>
+                    <div class="row"><span>Calculated Bus EMF</span><span class="rv rv-a" id="mq8Volt">---</span></div>
+                    <div class="row"><span>Resistance Ratio Rs/Ro</span><span class="rv rv-o" id="mq8RsRo">---</span>
+                    </div>
+                    <div class="row"><span>H₂ PPM Quantization</span><span class="rv rv-g" id="mq8PPM">---</span></div>
+                </div>
+            </div>
+
+            <div class="sb-sec">
+                <div class="sb-t">Plume Dispersion Boundary Coefficients</div>
+                <div class="ctrl" style="display:none;">
+                    <label>Mass Emission Rate Q (kg/s) <em id="lQ">0.0005</em></label>
+                    <input type="range" id="Q" min="0.00001" max="0.05" step="0.00001" value="0.0005">
+                </div>
+                <div class="ctrl">
+                    <label>Maximum Boundary Range (m) <em id="lRange">1000</em></label>
+                    <input type="range" id="maxRange" min="100" max="5000" step="50" value="1000">
+                </div>
+                <div class="ctrl">
+                    <label>Virtual Plume Elevation H (m) <em id="lH">30</em></label>
+                    <input type="range" id="Heff" min="0" max="100" step="0.5" value="30">
+                </div>
+                <div class="ctrl">
+                    <label>Pasquill Stability Class <em id="lsc">Near Neutral</em></label>
+                    <select id="stability">
+                        <option value="A">A — Extreme Thermal Instability</option>
+                        <option value="B">B — Moderate Instability</option>
+                        <option value="C">C — Minor Instability</option>
+                        <option value="D" selected>D — Neutral Matrix Standard</option>
+                        <option value="E">E — Moderate Micro-Stability</option>
+                        <option value="F">F — Extreme Stability Stratum</option>
+                    </select>
+                </div>
+                <div class="ctrl">
+                    <label>Cross-Section Z Plane (m) <em id="lZslice">0</em></label>
+                    <input type="range" id="Zslice" min="0" max="80" step="1" value="0">
+                </div>
+                <div class="ctrl">
+                    <label>Canvas Overlay Opacity <em id="lopac">0.80</em></label>
+                    <input type="range" id="opacity" min="0.1" max="1" step="0.05" value="0.80">
+                </div>
+            </div>
+
+            <div class="sb-sec">
+                <div class="sb-t">Mass Concentration Density Scale (µg/m³)</div>
+                <div class="scale-bar"></div>
+                <div class="scale-ticks">
+                    <span>0</span><span id="scT1">&mdash;</span><span id="scT2">&mdash;</span>
+                    <span id="scT3">&mdash;</span><span id="scMax">&mdash;</span>
+                </div>
+            </div>
+
         </div>
 
-        <div class="section-title">METEOROLOGY</div>
-        <div class="control-group">
-            <label>Wind Speed (m/s)</label>
-            <input type="number" id="ws" value="2.5" step="0.1" onchange="recompute()">
-        </div>
-        <div class="control-group">
-            <label>Wind Direction (From °)</label>
-            <input type="number" id="wd" value="315" onchange="recompute()">
-        </div>
-        <div class="control-group">
-            <label>Stability Class</label>
-            <select id="stability" onchange="recompute()">
-                <option value="A">A - Very Unstable</option>
-                <option value="B">B - Unstable</option>
-                <option value="C">C - Slightly Unstable</option>
-                <option value="D" selected>D - Neutral</option>
-                <option value="E">E - Slightly Stable</option>
-            </select>
+        <div id="mapWrap">
+            <div id="map"></div>
+            <canvas id="plumeCanvas"></canvas>
+
+            <div class="hud" id="hudW">
+                <canvas id="compass" width="54" height="54"
+                    style="display:block;margin-bottom:6px;filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15));"></canvas>
+                <div id="hudWT" style="color:var(--orange);font-family:'JetBrains Mono',monospace;font-weight:700">
+                    Vector Status: Scan pending</div>
+            </div>
+
+            <div class="hud" id="hudS">
+                <div id="hudST"
+                    style="color:var(--yellow);font-family:'Orbitron',sans-serif;font-weight:800;font-size:0.85rem;letter-spacing:0.05em">
+                    SYSTEM BOOT</div>
+                <div id="hudTime" style="color:var(--dim);font-size:.68rem;margin-top:2px;font-family:'JetBrains Mono'">
+                </div>
+            </div>
+
+            <div class="hud" id="hudC">
+                <span id="coordTxt" style="color:var(--text-heading);font-weight:500">Awaiting radar lock
+                    positioning</span>
+            </div>
+
+            <div class="hud" id="hudDrone">
+                <div
+                    style="color:var(--drone);margin-bottom:4px;font-family:'Orbitron',sans-serif;font-weight:800;letter-spacing:0.02em">
+                    ◆ TARGET DETECTOR DRONE</div>
+                <div id="dronePos" style="font-size:.75rem;font-family:'JetBrains Mono';font-weight:500;">23.09422°N
+                    90.01574°E</div>
+                <div id="droneAlt"
+                    style="font-size:.75rem;color:var(--accent);font-family:'JetBrains Mono';font-weight:700;margin-top:2px;">
+                    ALT STACK: 30.00m AGL</div>
+            </div>
+
+            <div id="tooltip"></div>
+
+            <div id="loader">
+                <div class="spinner-container">
+                    <div class="spinner"></div>
+                    <div class="spinner-inner"></div>
+                </div>
+                <p>INITIALIZING APEX RADAR STREAM</p>
+                <small
+                    style="color:var(--dim);font-size:.7rem;font-family:'JetBrains Mono';letter-spacing:0.02em">ISOTOPER
+                    PLATFORM v2.6 · MQ-8 CALIBRATION COMPLIANT</small>
+                <div id="loaderLog">Accessing core memory registers&hellip;</div>
+            </div>
         </div>
     </div>
 
-    <div id="map-container">
-        <div id="map"></div>
-        <div class="hud">
-            <div style="font-size: 0.6rem; opacity: 0.7;">MAX CONCENTRATION</div>
-            <div class="hud-val" id="max-c">0.00 μg/m³</div>
-            <hr style="border: 0; border-top: 1px solid var(--border); margin: 10px 0;">
-            <div id="drone-status" style="font-size: 0.6rem;">SYNCED WITH B15 NODE</div>
+    <div id="statsBar">
+        <div class="stat"><span class="sl">Peak Cloud Concentration</span><span class="sv" id="sPeak">&mdash;</span>
         </div>
+        <div class="stat"><span class="sl">Max Peak Vector Downwind</span><span class="sv" id="stX">&mdash;</span></div>
+        <div class="stat"><span class="sl">Crosswind Vector Deviation</span><span class="sv" id="stY">&mdash;</span>
+        </div>
+        <div class="stat"><span class="sl">Vertical Capture Plane</span><span class="sv" id="stZ">&mdash;</span></div>
+        <div class="stat"><span class="sl">H Stack Target Baseline</span><span class="sv" id="stH">&mdash;</span></div>
+        <div class="stat"><span class="sl">Stream Velocity</span><span class="sv" id="sWind">&mdash;</span></div>
+        <div class="stat"><span class="sl">True Angle Flow</span><span class="sv" id="sWindDir">&mdash;</span></div>
+        <div class="stat"><span class="sl">Bus Datetime Cycle</span><span class="sv" id="sTime">&mdash;</span></div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
     <script>
-        const systemChannel = new BroadcastChannel('isotoper_telemetry');
-        let map, plumeLayer;
-        let SRC = { lat: 23.8103, lon: 90.4125 };
+        // =========================================================================
+        // CORE AVIONICS CALCULATION MODEL — GAUSSIAN DISPERSION INVERSION MATRIX
+        // =========================================================================
 
-        // 1. Unified Sync Listener
-        systemChannel.onmessage = (e) => {
-            if (e.data.type === 'THEME_SYNC') {
-                document.documentElement.setAttribute('data-theme', e.data.theme);
-            }
-            if (e.data.type === 'DATA_UPDATE') {
-                // Future GPS sync can be added here
-                console.log("Telemetry received in GPM Engine");
-            }
+        const PG = {
+            A: { ay: 0.22, by: 0.9, az: 0.20, bz: 0.9 },
+            B: { ay: 0.16, by: 0.9, az: 0.12, bz: 0.9 },
+            C: { ay: 0.11, by: 0.9, az: 0.08, bz: 0.9 },
+            D: { ay: 0.08, by: 0.9, az: 0.06, bz: 0.9 },
+            E: { ay: 0.06, by: 0.9, az: 0.03, bz: 0.9 },
+            F: { ay: 0.04, by: 0.9, az: 0.016, bz: 0.9 },
         };
 
-        // 2. Initialize Map
-        function initMap() {
-            map = L.map('map').setView([SRC.lat, SRC.lon], 15);
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
-            L.marker([SRC.lat, SRC.lon]).addTo(map).bindPopup("Source Core");
-        }
-
-        // 3. Simple GPM Calculation (Visual Proxy)
-        function recompute() {
-            if (plumeLayer) map.removeLayer(plumeLayer);
-
-            const wd = document.getElementById('wd').value;
-            const angle = (parseFloat(wd) + 180) % 360; // Plume goes toward
-
-            // Visual Plume Generation Logic
-            // This is a simplified visual representation for the canvas
-            const latlngs = [];
-            const segments = 20;
-            const spread = 30; // degrees
-
-            for (let i = 0; i < segments; i++) {
-                const dist = i * 200;
-                const offset = (i * 15); // growing width
-                // Calculate polygon points...
-            }
-            // Logic for drawing the plume on Leaflet would go here
-            document.getElementById('max-c').innerText = (Math.random() * 100).toFixed(2) + " μg/m³";
-        }
-
-        window.onload = () => {
-            initMap();
-            recompute();
+        const WMO = {
+            0: 'Clear', 1: 'Mainly Clear', 2: 'Scattered', 3: 'Overcast', 45: 'Rad Fog',
+            51: 'Light Drizzle', 61: 'Light Rain', 63: 'Rain Vol', 65: 'Heavy Rain', 80: 'Showers', 95: 'T-Storm Active'
         };
+        const DIR_NAMES = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+        const PPM_TO_UGM3_H2 = 82.4;
+
+        let SRC = { lat: 23.0942, lon: 90.0157, alt: 30 };
+        let W = { U: 2.6, WD: 315, temp: 28, hum: 28, code: 0 };
+        let AQ = {};
+        let windMode = 'live';
+        let plumeCache = null;
+        let droneMarker = null;
+        let pickingMode = false;
+
+        delete L.Icon.Default.prototype._getIconUrl;
+        L.Icon.Default.mergeOptions({ iconUrl: '', iconRetinaUrl: '', shadowUrl: '' });
+
+        const map = L.map('map', {
+            center: [SRC.lat, SRC.lon], zoom: 14,
+            zoomControl: false, attributionControl: false
+        });
+
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+            { subdomains: 'abcd', maxZoom: 19 }).addTo(map);
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+            { maxZoom: 19, opacity: 0.15 }).addTo(map);
+        L.control.zoom({ position: 'bottomright' }).addTo(map);
+        L.control.attribution({ position: 'bottomright', prefix: 'CartoDB/Esri/Open-Meteo' }).addTo(map);
+
+        function makeDroneIcon() {
+            return L.divIcon({
+                html: '<div class="drone-marker-pulsing" style="width:16px;height:16px;border-radius:50%;background:var(--drone);border:2px solid #fff;box-shadow:0 0 18px var(--drone);"></div>',
+                iconSize: [16, 16], iconAnchor: [8, 8], className: ''
+            });
+        }
+
+        function placeDroneMarker() {
+            if (droneMarker) droneMarker.remove();
+            droneMarker = L.marker([SRC.lat, SRC.lon], { icon: makeDroneIcon(), zIndexOffset: 1000 })
+                .bindTooltip('ISOTOPER B15 INTERCEPT HUB (' + SRC.alt + 'm AGL)', { direction: 'right' })
+                .addTo(map);
+        }
+        placeDroneMarker();
+
+        map.on('click', function (e) {
+            if (!pickingMode) return;
+            SRC.lat = +e.latlng.lat.toFixed(6);
+            SRC.lon = +e.latlng.lng.toFixed(6);
+            document.getElementById('inLat').value = SRC.lat;
+            document.getElementById('inLon').value = SRC.lon;
+            finishPick();
+            applyDronePosition(true);
+        });
+
+        function pickFromMap() {
+            pickingMode = true;
+            document.getElementById('pickMsg').style.display = 'block';
+            document.getElementById('mapWrap').style.cursor = 'crosshair';
+        }
+        function finishPick() {
+            pickingMode = false;
+            document.getElementById('pickMsg').style.display = 'none';
+            document.getElementById('mapWrap').style.cursor = '';
+        }
+
+        function applyDronePosition(skipPan) {
+            const lat = parseFloat(document.getElementById('inLat').value);
+            const lon = parseFloat(document.getElementById('inLon').value);
+            const alt = parseFloat(document.getElementById('inAlt').value) || 30;
+            if (isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+                document.getElementById('inLat').classList.add('invalid');
+                document.getElementById('inLon').classList.add('invalid');
+                return;
+            }
+            document.getElementById('inLat').classList.remove('invalid');
+            document.getElementById('inLon').classList.remove('invalid');
+            SRC.lat = lat; SRC.lon = lon; SRC.alt = alt;
+            document.getElementById('Heff').value = alt;
+            document.getElementById('lH').textContent = alt;
+            placeDroneMarker();
+            updateDroneHUD();
+            if (!skipPan) map.flyTo([lat, lon], map.getZoom(), { duration: 0.8 });
+            recomputePlume();
+        }
+
+        function resetDroneToDefault() {
+            SRC = { lat: 23.0942, lon: 90.0157, alt: 30 };
+            document.getElementById('inLat').value = SRC.lat;
+            document.getElementById('inLon').value = SRC.lon;
+            document.getElementById('inAlt').value = SRC.alt;
+            document.getElementById('Heff').value = SRC.alt;
+            document.getElementById('lH').textContent = SRC.alt;
+            placeDroneMarker();
+            updateDroneHUD();
+            map.flyTo([SRC.lat, SRC.lon], 14, { duration: 0.8 });
+            recomputePlume();
+        }
+
+        function updateDroneHUD() {
+            document.getElementById('dronePos').textContent =
+                SRC.lat.toFixed(5) + '°N  ' + SRC.lon.toFixed(5) + '°E';
+            document.getElementById('droneAlt').textContent = 'ALT STACK: ' + SRC.alt + 'm AGL';
+            document.getElementById('srcLatDisp').textContent = SRC.lat.toFixed(6);
+            document.getElementById('srcLonDisp').textContent = SRC.lon.toFixed(6);
+            document.getElementById('srcAltDisp').textContent = SRC.alt + ' m';
+        }
+
+        function setWindMode(mode) {
+            windMode = mode;
+            document.getElementById('tabLive').classList.toggle('active', mode === 'live');
+            document.getElementById('tabManual').classList.toggle('active', mode === 'manual');
+            document.getElementById('manualWindPanel').style.display = mode === 'manual' ? 'block' : 'none';
+            if (mode === 'manual') {
+                W.U = +document.getElementById('manWS').value;
+                W.WD = +document.getElementById('manWD').value;
+                updateUI(); recomputePlume();
+            }
+        }
+
+        document.getElementById('manWS').addEventListener('input', function () {
+            W.U = +this.value;
+            document.getElementById('lWS').textContent = W.U.toFixed(1);
+            if (windMode === 'manual') { updateUI(); recomputePlume(); }
+        });
+        document.getElementById('manWD').addEventListener('input', function () {
+            W.WD = +this.value;
+            document.getElementById('lWD').textContent = W.WD;
+            if (windMode === 'manual') { updateUI(); recomputePlume(); }
+        });
+
+        function log(m) { document.getElementById('loaderLog').textContent = m; }
+
+        async function fetchWeatherDirect(url) {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`Weather system telemetry breach: ${response.status}`);
+            return await response.json();
+        }
+
+        function adcToPPM(adc, Ro, RL) {
+            var v = adc * (3.3 / 4095.0);
+            if (v < 0.001) return 0;
+            var Vc = 5.0;
+            var Rs = ((Vc - v) / v) * RL;
+            var ratio = Rs / Ro;
+            return Math.max(0, 987.99 * Math.pow(Math.max(ratio, 0.001), -2.162));
+        }
+
+        async function fetchSheetData() {
+            const scriptURL = "https://script.google.com/macros/s/AKfycbyfaKegzXJITJhS6Po5G0ir-y6ikMA1xN4rc3Oo3CEObOC9700473MPbuTnazip3fCn/exec";
+            document.getElementById('sheetStatus').textContent = 'Synchronizing sensor array registers...';
+
+            try {
+                const response = await fetch(scriptURL);
+                const data = await response.json();
+
+                if (data.error) throw new Error(data.error);
+                if (!data.latest) throw new Error('Missing "latest" data object from API');
+
+                const env = data.latest;
+                const adc = parseFloat(env.h2_raw);
+                const ws = parseFloat(env.ws || env.wind_speed || W.U);
+                const wd = parseFloat(env.wd || env.wind_direction || W.WD);
+
+                if (isNaN(adc) || adc <= 0) throw new Error('Invalid or missing h2_raw value');
+
+                const Ro = parseFloat(document.getElementById('mq8Ro').value) || 10;
+                const RL = parseFloat(document.getElementById('mq8RL').value) || 10;
+
+                const volt = adc * (3.3 / 4095.0);
+                const Rs = ((5.0 - volt) / volt) * RL;
+                const ratio = Rs / Ro;
+                const ppm = adcToPPM(adc, Ro, RL);
+                const C_ug_m3 = ppm * PPM_TO_UGM3_H2;
+
+                document.getElementById('mq8ADC').textContent = adc.toFixed(0);
+                document.getElementById('mq8Volt').textContent = volt.toFixed(3) + ' V';
+                document.getElementById('mq8RsRo').textContent = ratio.toFixed(3);
+                document.getElementById('mq8PPM').textContent = ppm.toFixed(2) + ' ppm';
+                document.getElementById('sheetStatus').textContent = `Bound: ${C_ug_m3.toFixed(2)} µg/m³ H₂`;
+
+                if (!isNaN(ws) && !isNaN(wd) && windMode === 'live') {
+                    W.U = ws;
+                    W.WD = wd;
+                }
+
+                updateDynamicQ(C_ug_m3);
+                updateUI();
+                recomputePlume();
+
+            } catch (err) {
+                console.error("Apps Script Integration Fault:", err);
+                document.getElementById('sheetStatus').textContent = 'Fault: ' + err.message;
+            }
+        }
+
+        function updateDynamicQ(C_ug_m3) {
+            if (C_ug_m3 <= 0) return;
+
+            const H = parseFloat(document.getElementById('Heff').value);
+            const stab = document.getElementById('stability').value;
+            const U = Math.max(W.U, 0.2);
+
+            const x_measure = 1.0;
+            const y_measure = 0.0;
+            const z_measure = SRC.alt;
+
+            const { sy, sz } = getSigmas(x_measure, stab);
+
+            const expY = Math.exp(-(y_measure * y_measure) / (2 * sy * sy));
+            const expZ1 = Math.exp(-((z_measure - H) * (z_measure - H)) / (2 * sz * sz));
+            const expZ2 = Math.exp(-((z_measure + H) * (z_measure + H)) / (2 * sz * sz));
+            const D = (1 / (2 * Math.PI * sy * sz * U)) * expY * (expZ1 + expZ2);
+
+            const Q_ug_s = C_ug_m3 / D;
+            const Q_kg_s = Q_ug_s * 1e-9;
+
+            const qSlider = document.getElementById('Q');
+            if (Q_kg_s > parseFloat(qSlider.max)) qSlider.max = (Q_kg_s * 1.5).toFixed(5);
+            if (Q_kg_s < parseFloat(qSlider.min)) qSlider.min = (Q_kg_s * 0.5).toFixed(5);
+
+            qSlider.value = Q_kg_s;
+            document.getElementById('lQ').textContent = Q_kg_s.toFixed(6);
+        }
+
+        async function fetchLiveWeather() {
+            if (windMode === 'manual') return;
+            document.getElementById('loader').style.display = 'flex';
+            document.getElementById('hudST').textContent = 'SCANNING...';
+            document.getElementById('hudST').style.color = 'var(--yellow)';
+            document.getElementById('btnRefresh').disabled = true;
+
+            const fURL = 'https://api.open-meteo.com/v1/forecast?latitude=' + SRC.lat +
+                '&longitude=' + SRC.lon +
+                '&current=temperature_2m,relative_humidity_2m,weather_code,surface_pressure,' +
+                'wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=ms&timezone=auto';
+            const aqURL = 'https://air-quality-api.open-meteo.com/v1/air-quality?latitude=' + SRC.lat +
+                '&longitude=' + SRC.lon + '&current=pm10,pm2_5,nitrogen_dioxide,carbon_monoxide,ozone,european_aqi';
+
+            try {
+                log('Intercepting meteorological frames for Dhaka (' + SRC.lat.toFixed(4) + ', ' + SRC.lon.toFixed(4) + ')…');
+
+                const [fData, aqJson] = await Promise.all([
+                    fetchWeatherDirect(fURL).catch(e => { return { current: {} }; }),
+                    fetchWeatherDirect(aqURL).catch(e => { return { current: {} }; })
+                ]);
+
+                log('Injecting environmental telemetry parameters into plume engine…');
+                const cur = fData.current || {};
+
+                const newWindSpeed = typeof cur.wind_speed_10m === 'number' ? cur.wind_speed_10m : W.U;
+                const newWindDir = typeof cur.wind_direction_10m === 'number' ? cur.wind_direction_10m : W.WD;
+
+                if (newWindSpeed !== W.U || newWindDir !== W.WD) {
+                    W.U = newWindSpeed;
+                    W.WD = newWindDir;
+                }
+
+                W.temp = typeof cur.temperature_2m === 'number' ? cur.temperature_2m : W.temp;
+                W.hum = typeof cur.relative_humidity_2m === 'number' ? cur.relative_humidity_2m : W.hum;
+                W.code = typeof cur.weather_code === 'number' ? cur.weather_code : W.code;
+                W.gust = typeof cur.wind_gusts_10m === 'number' ? cur.wind_gusts_10m : null;
+
+                const aqc = aqJson.current || {};
+                AQ.pm25 = aqc.pm2_5 ?? null;
+                AQ.pm10 = aqc.pm10 ?? null;
+                AQ.no2 = aqc.nitrogen_dioxide ?? null;
+                AQ.aqi = aqc.european_aqi ?? null;
+
+                updateUI();
+                recomputePlume();
+
+                const now = new Date().toLocaleTimeString('en-BD', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                document.getElementById('sTime').textContent = now;
+                document.getElementById('hudTime').textContent = 'Synchronized ' + now;
+                document.getElementById('hudST').textContent = 'ONLINE';
+                document.getElementById('hudST').style.color = 'var(--green)';
+
+            } catch (err) {
+                console.error('Sensor connection dropped:', err);
+                log('⚠ Telemetry fault recovery loop active — executing safe defaults');
+                document.getElementById('hudST').textContent = 'FALLBACK';
+                document.getElementById('hudST').style.color = 'var(--orange)';
+                updateUI();
+                recomputePlume();
+            }
+
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('btnRefresh').disabled = false;
+        }
+
+        const dirN = d => DIR_NAMES[Math.round(d / 22.5) % 16];
+        const fmt = (v, u, dp = 1) => (v != null) ? v.toFixed(dp) + ' ' + u : 'N/A';
+        const aqiC = v => !v ? 'var(--text)' : v < 20 ? 'var(--green)' : v < 40 ? '#10b981' : v < 60 ? 'var(--yellow)' : v < 80 ? 'var(--orange)' : 'var(--red)';
+
+        function updateUI() {
+            const U = W.U, WD = W.WD;
+            const plumeToward = (WD + 180) % 360;
+            document.getElementById('lcWind').textContent = U.toFixed(1) + ' m/s' + (W.gust ? ' (g:' + W.gust.toFixed(1) + ')' : '');
+            document.getElementById('lcDir').textContent = WD + '° FROM ' + dirN(WD);
+            document.getElementById('lcPlumeDir').textContent = plumeToward + '° TO ' + dirN(plumeToward);
+            document.getElementById('lcTemp').textContent = fmt(W.temp, '°C');
+            document.getElementById('lcHum').textContent = fmt(W.hum, '%', 0);
+            document.getElementById('lcCode').textContent = WMO[W.code] || ('Code ' + W.code);
+            document.getElementById('aqPm25').textContent = fmt(AQ.pm25, 'µg/m³');
+            document.getElementById('aqPm10').textContent = fmt(AQ.pm10, 'µg/m³');
+            document.getElementById('aqNo2').textContent = fmt(AQ.no2, 'µg/m³');
+            const ae = document.getElementById('aqAqi');
+            ae.textContent = AQ.aqi ?? 'N/A'; ae.style.color = aqiC(AQ.aqi);
+
+            document.getElementById('wstrip').innerHTML =
+                '<span>Wind: <span class="wv">' + U.toFixed(1) + ' m/s ' + dirN(WD) + '</span></span>' +
+                '<span>➔ <span class="wv">' + plumeToward + '° ' + dirN(plumeToward) + '</span></span>' +
+                '<span>Temp: <span class="wv">' + W.temp.toFixed(1) + '°C</span></span>' +
+                '<span>RH: <span class="wv">' + W.hum + '%</span></span>' +
+                '<span>Forecast: <span class="wv">' + (WMO[W.code] || W.code) + '</span></span>' +
+                '<span>AQI: <span class="wv" style="color:' + aqiC(AQ.aqi) + '">' + (AQ.aqi || '—') + '</span></span>';
+
+            document.getElementById('sWind').textContent = U.toFixed(2) + ' m/s';
+            document.getElementById('sWindDir').textContent = WD + '° FROM ' + dirN(WD);
+            drawCompass(WD);
+            document.getElementById('hudWT').textContent = 'Vector Flow: ' + U.toFixed(1) + ' m/s FROM ' + dirN(WD) + ' (' + WD + '°)';
+        }
+
+        function drawCompass(wd) {
+            const cv = document.getElementById('compass');
+            const ctx = cv.getContext('2d');
+            ctx.clearRect(0, 0, 54, 54);
+            const cx = 27, cy = 27, r = 21;
+
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+
+            ctx.strokeStyle = isDark ? '#4B5563' : '#9CA3AF'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2 * Math.PI); ctx.stroke();
+
+            for (let i = 0; i < 8; i++) {
+                const a = i * Math.PI / 4;
+                ctx.strokeStyle = isDark ? '#6B7280' : '#6B7280'; ctx.lineWidth = 1; ctx.beginPath();
+                ctx.moveTo(cx + Math.sin(a) * (r - 4), cy - Math.cos(a) * (r - 4));
+                ctx.lineTo(cx + Math.sin(a) * r, cy - Math.cos(a) * r); ctx.stroke();
+            }
+            ctx.fillStyle = isDark ? '#9CA3AF' : '#374151'; ctx.font = '7px "JetBrains Mono"'; ctx.textAlign = 'center';
+            ctx.fillText('N', cx, cy - r + 8); ctx.fillText('S', cx, cy + r - 1);
+
+            const fr = wd * Math.PI / 180, a = 15;
+
+            ctx.strokeStyle = '#ea580c'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(cx - Math.sin(fr) * a, cy - Math.cos(fr) * a);
+            ctx.lineTo(cx + Math.sin(fr) * a, cy + Math.cos(fr) * a);
+            ctx.stroke();
+
+            const tx = cx + Math.sin(fr) * a, ty = cy + Math.cos(fr) * a;
+            ctx.fillStyle = '#ea580c';
+            ctx.beginPath(); ctx.arc(tx, ty, 3.5, 0, 2 * Math.PI); ctx.fill();
+            ctx.fillStyle = 'rgba(255,255,255,0.2)';
+            ctx.beginPath(); ctx.arc(cx, cy, 2, 0, 2 * Math.PI); ctx.fill();
+        }
+
+        function getSigmas(x, stab) {
+            const p = PG[stab] || PG.D;
+            const sy = p.ay * Math.pow(x, p.by);
+            const sz = p.az * Math.pow(x, p.bz);
+            return { sy, sz };
+        }
+
+        function gaussConc3D(x, y, z, Q, U, H, stab) {
+            if (x <= 0.5) return 0;
+            const { sy, sz } = getSigmas(x, stab);
+            if (sy < 1e-4 || sz < 1e-4) return 0;
+            const coeff = Q / (2 * Math.PI * sy * sz * Math.max(U, 0.2));
+            const expY = Math.exp(-(y * y) / (2 * sy * sy));
+            const expZ1 = Math.exp(-((z - H) * (z - H)) / (2 * sz * sz));
+            const expZ2_correct = Math.exp(-((z + H) * (z + H)) / (2 * sz * sz));
+            return coeff * expY * (expZ1 + expZ2_correct) * 1e9;
+        }
+
+        function heatColor(t) {
+            const stops = [
+                [0, 15, 23, 42],
+                [0.12, 30, 41, 59],
+                [0.26, 14, 116, 144],
+                [0.40, 6, 182, 212],
+                [0.54, 16, 185, 129],
+                [0.68, 132, 204, 22],
+                [0.80, 245, 158, 11],
+                [0.91, 239, 68, 68],
+                [1.0, 225, 29, 72],
+            ];
+            t = Math.max(0, Math.min(1, t));
+            let i = 0;
+            while (i < stops.length - 2 && t > stops[i + 1][0]) i++;
+            const lo = stops[i], hi = stops[i + 1], f = (t - lo[0]) / (hi[0] - lo[0]);
+            return [Math.round(lo[1] + f * (hi[1] - lo[1])),
+            Math.round(lo[2] + f * (hi[2] - lo[2])),
+            Math.round(lo[3] + f * (hi[3] - lo[3]))];
+        }
+
+        function recomputePlume() {
+            const canvas = document.getElementById('plumeCanvas');
+            const wrap = document.getElementById('mapWrap');
+            const CW = wrap.clientWidth, CH = wrap.clientHeight;
+            canvas.width = CW; canvas.height = CH;
+
+            const Q = parseFloat(document.getElementById('Q').value);
+            const H = parseFloat(document.getElementById('Heff').value);
+            const stab = document.getElementById('stability').value;
+            const opac = parseFloat(document.getElementById('opacity').value);
+            const zReceptor = parseFloat(document.getElementById('Zslice').value);
+
+            const maxRangeM = parseFloat((document.getElementById('maxRange') || { value: '1000' }).value) || 1000;
+            const U = Math.max(W.U, 0.2);
+            const WD = W.WD;
+
+            const plumeTowardDeg = (WD + 180) % 360;
+            const pRad = plumeTowardDeg * Math.PI / 180;
+
+            const wUx = Math.sin(pRad);
+            const wUy = Math.cos(pRad);
+            const wPx = -wUy;
+            const wPy = wUx;
+
+            const srcPt = map.latLngToContainerPoint([SRC.lat, SRC.lon]);
+            const mpp = 40075016.686 * Math.cos(SRC.lat * Math.PI / 180) / Math.pow(2, map.getZoom() + 8);
+
+            const SCALE = 2;
+            const NW = Math.ceil(CW / SCALE);
+            const NH = Math.ceil(CH / SCALE);
+            const grid = new Float32Array(NW * NH);
+            let maxC = 0;
+            let peakX = 0, peakY = 0;
+
+            for (let py = 0; py < NH; py++) {
+                for (let px = 0; px < NW; px++) {
+                    const dx = (px * SCALE) - srcPt.x;
+                    const dy = (py * SCALE) - srcPt.y;
+                    const dxM = dx * mpp;
+                    const dyM = dy * mpp;
+                    const xw = dxM * wUx + dyM * wUy;
+                    const yw = dxM * wPx + dyM * wPy;
+                    const c = (xw > 0 && xw <= maxRangeM) ? gaussConc3D(xw, yw, zReceptor, Q, U, H, stab) : 0;
+                    grid[py * NW + px] = c;
+                    if (c > maxC) { maxC = c; peakX = xw; peakY = yw; }
+                }
+            }
+
+            plumeCache = { grid, NW, NH, SCALE, maxC, srcPt, mpp, wUx, wUy, wPx, wPy };
+
+            const imgData = new ImageData(NW, NH);
+            const logMax = Math.log10(Math.max(maxC, 1e-3));
+            const logMin = logMax - 5;
+
+            for (let i = 0; i < NW * NH; i++) {
+                const c = grid[i];
+                if (c < 1e-10) { imgData.data[i * 4 + 3] = 0; continue; }
+                const t = Math.max(0, Math.min(1, (Math.log10(c) - logMin) / (logMax - logMin)));
+                const [r, g, b] = heatColor(t);
+                imgData.data[i * 4] = r;
+                imgData.data[i * 4 + 1] = g;
+                imgData.data[i * 4 + 2] = b;
+                imgData.data[i * 4 + 3] = Math.round(t * 255 * opac);
+            }
+
+            const off = new OffscreenCanvas(NW, NH);
+            off.getContext('2d').putImageData(imgData, 0, 0);
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, CW, CH);
+            ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(off, 0, 0, CW, CH);
+
+            const stP = PG[stab] || PG.D;
+            const xMax = H > 0 ? Math.pow(H / (Math.sqrt(2) * stP.az), 1 / stP.bz) : 200;
+            const { sy: syMax, sz: szMax } = getSigmas(Math.max(xMax, 1), stab);
+
+            document.getElementById('sPeak').textContent = maxC.toFixed(3) + ' µg/m³';
+            document.getElementById('stX').textContent = peakX > 0 ? peakX.toFixed(0) + ' m' : '—';
+            document.getElementById('stY').textContent = peakY.toFixed(0) + ' m';
+            document.getElementById('stZ').textContent = zReceptor + ' m';
+            document.getElementById('stH').textContent = H.toFixed(1) + ' m';
+
+            document.getElementById('axX').textContent = peakX > 0 ? peakX.toFixed(0) + ' m' : '—';
+            document.getElementById('axY').textContent = peakY.toFixed(0) + ' m';
+            document.getElementById('axZ').textContent = zReceptor + ' m AGL';
+            document.getElementById('sSy').textContent = syMax.toFixed(1) + ' m';
+            document.getElementById('sSz').textContent = szMax.toFixed(1) + ' m';
+            document.getElementById('sH').textContent = H.toFixed(1) + ' m';
+            document.getElementById('sDist').textContent = xMax.toFixed(0) + ' m';
+
+            document.getElementById('scMax').textContent = maxC.toFixed(2);
+            document.getElementById('scT3').textContent = (maxC * 0.75).toFixed(2);
+            document.getElementById('scT2').textContent = (maxC * 0.5).toFixed(2);
+            document.getElementById('scT1').textContent = (maxC * 0.25).toFixed(2);
+        }
+
+        map.on('mousemove', function (e) {
+            const pt = map.latLngToContainerPoint(e.latlng);
+            document.getElementById('coordTxt').textContent =
+                e.latlng.lat.toFixed(5) + '°N  ' + e.latlng.lng.toFixed(5) + '°E';
+
+            if (!plumeCache) return;
+            const d = plumeCache;
+            const px = Math.floor(pt.x / d.SCALE);
+            const py = Math.floor(pt.y / d.SCALE);
+            if (px >= 0 && px < d.NW && py >= 0 && py < d.NH) {
+                const c = d.grid[py * d.NW + px];
+                const dx = pt.x - d.srcPt.x, dy = pt.y - d.srcPt.y;
+                const dxM = dx * d.mpp, dyM = dy * d.mpp;
+                const xw = dxM * d.wUx + dyM * d.wUy;
+                const yw = dxM * d.wPx + dyM * d.wPy;
+                const zw = parseFloat(document.getElementById('Zslice').value);
+                const tip = document.getElementById('tooltip');
+                tip.style.display = 'block';
+                tip.style.left = (pt.x + 16) + 'px';
+                tip.style.top = (pt.y - 12) + 'px';
+                tip.innerHTML = 'x=<em>' + xw.toFixed(0) + 'm</em> y=<em>' + yw.toFixed(0) +
+                    'm</em> z=<em>' + zw + 'm</em><br>Density=<em>' + c.toFixed(4) + ' µg/m³</em>';
+            }
+        });
+        map.on('mouseout', () => { document.getElementById('tooltip').style.display = 'none'; });
+        map.on('moveend zoomend', recomputePlume);
+
+        function bindSlider(id, lid, fmt) {
+            const el = document.getElementById(id);
+            const ll = document.getElementById(lid);
+            el.addEventListener('input', () => { ll.textContent = fmt ? fmt(+el.value) : el.value; });
+            el.addEventListener('change', recomputePlume);
+        }
+        bindSlider('Q', 'lQ', v => v.toFixed(5));
+        bindSlider('maxRange', 'lRange');
+        bindSlider('Heff', 'lH');
+        bindSlider('Zslice', 'lZslice');
+        bindSlider('opacity', 'lopac');
+
+        const stabNames = { A: 'Unstable A', B: 'Unstable B', C: 'Unstable C', D: 'Near Neutral', E: 'Stable E', F: 'Stable F' };
+        document.getElementById('stability').addEventListener('change', function () {
+            document.getElementById('lsc').textContent = stabNames[this.value] || this.value;
+            recomputePlume();
+        });
+
+        document.getElementById('inAlt').addEventListener('input', function () {
+            document.getElementById('Heff').value = this.value;
+            document.getElementById('lH').textContent = this.value;
+        });
+
+        let currentTheme = 'dark'; // Starting theme
+
+        function toggleTheme() {
+            currentTheme = currentTheme === 'light' ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', currentTheme);
+
+            const btn = document.getElementById('btnTheme');
+            if (currentTheme === 'dark') {
+                btn.innerHTML = '☀️ Light Mode';
+                btn.style.borderColor = 'var(--border)';
+                btn.style.color = 'var(--text-heading)';
+            } else {
+                btn.innerHTML = '🌙 Dark Mode';
+                btn.style.borderColor = 'var(--accent)';
+                btn.style.color = 'var(--accent)';
+            }
+            localStorage.setItem('theme', currentTheme);
+            if (typeof W !== 'undefined' && W.WD !== undefined) drawCompass(W.WD);
+        }
+
+        function initTheme() {
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            if (savedTheme === 'light') {
+                currentTheme = 'dark'; // Trick it so the toggle triggers correctly
+                toggleTheme();
+            }
+        }
+
+        window.addEventListener('load', () => {
+            initTheme();
+            updateDroneHUD();
+            drawCompass(315);
+            fetchLiveWeather();
+
+            setInterval(() => {
+                document.getElementById('hudTime').textContent =
+                    'System Sync · ' + new Date().toLocaleTimeString('en-BD', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            }, 1000);
+
+            setInterval(() => {
+                if (windMode === 'live') fetchLiveWeather();
+            }, 5 * 60 * 1000);
+
+            setTimeout(() => { recomputePlume(); }, 1000);
+        });
     </script>
 </body>
 
