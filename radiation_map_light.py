@@ -6,7 +6,8 @@ Fetches all GM-counter telemetry rows directly from the Google Sheet
 (1,136+ rows), filters out zero/invalid readings (54 zero rows filtered ->
 1,082 valid readings), maps all readings across a user-defined
 Latitude/Longitude survey bounding box along a UAV lawnmower flight path,
-interpolates a 56 × 38 (2,128-cell) dose distribution grid, and generates:
+interpolates a 56 × 38 (2,128-cell) dose distribution grid on standard
+OpenStreetMap (OSM) tiles (100% free, no API key required), and generates:
   1. radiation_dispersion_map.html (Dual / Interpolated Distribution View)
   2. radiation_map_light.html      (Discrete Measurement Nodes View)
 """
@@ -16,7 +17,6 @@ import io
 import json
 import math
 import warnings
-from datetime import datetime, timezone
 from pathlib import Path
 
 import branca.colormap as cm
@@ -136,6 +136,8 @@ DOSE_CONFIG = {
     ],
 }
 
+log10_300 = math.log10(300.0)
+
 
 # ============================================================================
 # 2. COLOR & TIER UTILITIES
@@ -185,9 +187,6 @@ def dose_to_continuous_hex(dose_uSv_h: float) -> str:
             )
             return rgb_to_hex(rgb)
     return stops[-1]["color"]
-
-
-log10_300 = math.log10(300.0)
 
 
 # ============================================================================
@@ -314,13 +313,12 @@ class RadiationData:
         """
         Distribute all valid GM readings along a serpentine (lawnmower) UAV survey
         path inside [lat_min..lat_max, lon_min..lon_max] and compute the 56 × 38
-        interpolated grid.
+        interpolated grid using a local hotspot-preserving kernel.
         """
         n = len(self.readings)
         if n == 0:
             return
 
-        # Proportional serpentine grid for N points (e.g. ~26 rows × 42 cols for 1,082 pts)
         rows = max(2, int(round(math.sqrt(n * 0.62))))
         cols = max(2, int(math.ceil(n / rows)))
 
@@ -368,26 +366,24 @@ class RadiationData:
 
         self.nodes = nodes
 
-        # Interpolate onto 56 × 38 grid inside the survey boundary
+        # Local hotspot-preserving IDW + Gaussian interpolation onto 56 × 38 grid
         grid_lats = np.linspace(self.lat_max, self.lat_min, GRID_ROWS)
         grid_lons = np.linspace(self.lon_min, self.lon_max, GRID_COLS)
         lon_mesh, lat_mesh = np.meshgrid(grid_lons, grid_lats)
 
         node_lats = np.array([pt["lat"] for pt in nodes])[:, None, None]
         node_lons = np.array([pt["lon"] for pt in nodes])[:, None, None]
-        node_log_doses = np.log10(np.maximum(0.01, np.array([pt["dose"] for pt in nodes])))[:, None, None]
+        node_doses = np.maximum(0.01, np.array([pt["dose"] for pt in nodes]))[:, None, None]
 
         dy = (lat_mesh[None, :, :] - node_lats) / lat_span
         dx = (lon_mesh[None, :, :] - node_lons) / lon_span
         dist_sq = dx * dx + dy * dy
 
-        # Adaptive bandwidth for dense (1000+ pt) vs sparse grids
-        sigma = 0.045 if n > 200 else 0.135
-        weights = np.exp(-dist_sq / (2.0 * sigma * sigma)) + 1.0 / (
-            np.power(dist_sq + 0.0004, 1.5)
+        sigma = 0.028 if n > 200 else 0.11
+        weights = np.exp(-dist_sq / (2.0 * sigma * sigma)) + 1.0 / np.power(
+            dist_sq + 0.00003, 2.15
         )
-        interp_log = np.sum(weights * node_log_doses, axis=0) / np.sum(weights, axis=0)
-        self.grid_matrix = np.power(10.0, interp_log)
+        self.grid_matrix = np.sum(weights * node_doses, axis=0) / np.sum(weights, axis=0)
 
     def get_dataframe(self):
         """Return pandas DataFrame of measurement nodes and summary statistics."""
@@ -451,7 +447,6 @@ class RadiationMapGenerator:
         with all 1,082+ valid Google Sheet readings baked in AND live Google Sheet
         CSV synchronization in the browser.
         """
-        # Compact array format [dose, cpm, cps, timestamp] for fast load of 1,082+ points
         compact_readings = [
             [r["dose"], r["cpm"], r["cps"], r["timestamp"]]
             for r in self.radiation_data.readings
@@ -522,7 +517,7 @@ class RadiationMapGenerator:
 
 
 # ============================================================================
-# 6. HTML / CSS / JS TEMPLATE (ISOTOPER B15 RADIATION DOSE MAP)
+# 6. HTML / CSS / JS TEMPLATE (SINGLE-VIEW SCALED, OSM DEFAULT, NO SCROLLBAR)
 # ============================================================================
 
 _HTML_TEMPLATE = r"""<!DOCTYPE html>
@@ -542,8 +537,8 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             --bg-card: #121721;
             --bg-card-inner: #161C28;
             --bg-input: #0E131B;
-            --border-subtle: rgba(255, 255, 255, 0.08);
-            --border-strong: rgba(255, 255, 255, 0.16);
+            --border-subtle: rgba(255, 255, 255, 0.09);
+            --border-strong: rgba(255, 255, 255, 0.17);
             --text-main: #F3F4F6;
             --text-secondary: #9CA3AF;
             --text-muted: #6B7280;
@@ -564,47 +559,60 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             box-sizing: border-box;
         }
 
-        body {
+        html, body {
             background-color: var(--bg-page);
             color: var(--text-main);
             font-family: var(--font-sans);
-            padding: 20px 24px 28px 24px;
-            min-height: 100vh;
+            width: 100%;
             overflow-x: hidden;
             -webkit-font-smoothing: antialiased;
         }
 
+        body {
+            padding: 12px 14px 14px 14px;
+        }
+
         .b15-wrapper {
-            max-width: 1440px;
+            width: 100%;
+            max-width: 100%;
             margin: 0 auto;
             display: flex;
             flex-direction: column;
-            gap: 16px;
+            gap: 10px;
         }
 
         /* ---------------- HEADER BAR ---------------- */
         .b15-header {
             display: flex;
             justify-content: space-between;
-            align-items: flex-end;
+            align-items: center;
             flex-wrap: wrap;
-            gap: 16px;
-            padding-bottom: 4px;
+            gap: 10px;
         }
 
         .b15-title-group {
             display: flex;
-            flex-direction: column;
-            gap: 4px;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .b15-title {
+            font-family: var(--font-display);
+            font-size: 1.35rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: #FFFFFF;
+            line-height: 1.1;
         }
 
         .b15-eyebrow {
-            display: flex;
+            display: inline-flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
             font-family: var(--font-mono);
-            font-size: 0.72rem;
-            letter-spacing: 0.12em;
+            font-size: 0.68rem;
+            letter-spacing: 0.1em;
             text-transform: uppercase;
             color: var(--text-secondary);
         }
@@ -613,12 +621,13 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 0.68rem;
+            padding: 3px 9px;
+            border-radius: 5px;
+            font-family: var(--font-mono);
+            font-size: 0.67rem;
             font-weight: 600;
             border: 1px solid var(--border-strong);
-            background: rgba(255, 255, 255, 0.04);
+            background: rgba(255, 255, 255, 0.05);
             color: var(--text-main);
             cursor: pointer;
             transition: all 0.18s ease;
@@ -637,28 +646,19 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             box-shadow: 0 0 6px #22C55E;
         }
 
-        .b15-title {
-            font-family: var(--font-display);
-            font-size: 1.85rem;
-            font-weight: 600;
-            letter-spacing: -0.02em;
-            color: #FFFFFF;
-            line-height: 1.15;
-        }
-
         /* ---------------- TOP CONTROLS ---------------- */
         .b15-controls {
             display: flex;
             align-items: center;
             flex-wrap: wrap;
-            gap: 10px;
+            gap: 8px;
         }
 
         .seg-group {
             display: inline-flex;
             background: var(--bg-card);
             border: 1px solid var(--border-strong);
-            border-radius: 8px;
+            border-radius: 7px;
             overflow: hidden;
             padding: 2px;
         }
@@ -668,10 +668,10 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             background: transparent;
             color: var(--text-secondary);
             font-family: var(--font-sans);
-            font-size: 0.78rem;
+            font-size: 0.74rem;
             font-weight: 600;
-            padding: 6px 14px;
-            border-radius: 6px;
+            padding: 4px 11px;
+            border-radius: 5px;
             cursor: pointer;
             transition: all 0.15s ease;
         }
@@ -684,12 +684,12 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
         .chk-pill {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             background: var(--bg-card);
             border: 1px solid var(--border-strong);
-            border-radius: 8px;
-            padding: 6px 12px;
-            font-size: 0.78rem;
+            border-radius: 7px;
+            padding: 4px 10px;
+            font-size: 0.74rem;
             font-weight: 500;
             color: var(--text-main);
             cursor: pointer;
@@ -706,14 +706,14 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
         }
 
         .chk-box {
-            width: 15px;
-            height: 15px;
-            border-radius: 4px;
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
             border: 1.5px solid var(--text-secondary);
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            font-size: 10px;
+            font-size: 9px;
             font-weight: 700;
             color: #0B0E14;
             background: transparent;
@@ -729,48 +729,48 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
         .coord-bar {
             background: var(--bg-card);
             border: 1px solid var(--border-subtle);
-            border-radius: 12px;
-            padding: 12px 16px;
+            border-radius: 10px;
+            padding: 8px 12px;
             display: flex;
             align-items: center;
             justify-content: space-between;
             flex-wrap: wrap;
-            gap: 12px;
+            gap: 8px;
         }
 
         .coord-bar-left {
             display: flex;
             align-items: center;
             flex-wrap: wrap;
-            gap: 12px;
+            gap: 8px;
         }
 
         .coord-tag {
             font-family: var(--font-mono);
-            font-size: 0.7rem;
+            font-size: 0.68rem;
             font-weight: 600;
-            letter-spacing: 0.08em;
+            letter-spacing: 0.06em;
             text-transform: uppercase;
             color: var(--accent);
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 5px;
             white-space: nowrap;
         }
 
         .coord-group {
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 5px;
             background: var(--bg-input);
             border: 1px solid var(--border-subtle);
-            padding: 4px 10px;
-            border-radius: 8px;
+            padding: 3px 8px;
+            border-radius: 6px;
         }
 
         .coord-group span {
             font-family: var(--font-mono);
-            font-size: 0.68rem;
+            font-size: 0.65rem;
             color: var(--text-secondary);
             text-transform: uppercase;
         }
@@ -780,11 +780,11 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             border: none;
             color: var(--text-main);
             font-family: var(--font-mono);
-            font-size: 0.78rem;
+            font-size: 0.74rem;
             font-weight: 600;
-            width: 96px;
+            width: 86px;
             outline: none;
-            padding: 2px 4px;
+            padding: 1px 2px;
             border-bottom: 1px solid transparent;
         }
 
@@ -796,22 +796,22 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             display: flex;
             align-items: center;
             flex-wrap: wrap;
-            gap: 8px;
+            gap: 6px;
         }
 
         .action-btn {
             font-family: var(--font-mono);
-            font-size: 0.72rem;
+            font-size: 0.69rem;
             font-weight: 600;
-            padding: 7px 12px;
-            border-radius: 7px;
+            padding: 5px 10px;
+            border-radius: 6px;
             border: 1px solid var(--border-strong);
             background: var(--bg-card-inner);
             color: var(--text-main);
             cursor: pointer;
             display: inline-flex;
             align-items: center;
-            gap: 6px;
+            gap: 5px;
             transition: all 0.15s ease;
             white-space: nowrap;
         }
@@ -842,22 +842,20 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
 
         .feed-status {
             font-family: var(--font-mono);
-            font-size: 0.7rem;
+            font-size: 0.67rem;
             color: var(--text-secondary);
-            display: flex;
-            align-items: center;
-            gap: 8px;
+            white-space: nowrap;
         }
 
         /* ---------------- DOSE RATE LOG SCALE CARD ---------------- */
         .scale-card {
             background: var(--bg-card);
             border: 1px solid var(--border-subtle);
-            border-radius: 12px;
-            padding: 16px 20px;
+            border-radius: 10px;
+            padding: 10px 14px;
             display: flex;
             flex-direction: column;
-            gap: 14px;
+            gap: 8px;
         }
 
         .scale-header {
@@ -865,12 +863,12 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
-            gap: 8px;
+            gap: 6px;
         }
 
         .scale-title {
             font-family: var(--font-mono);
-            font-size: 0.72rem;
+            font-size: 0.68rem;
             font-weight: 600;
             letter-spacing: 0.1em;
             text-transform: uppercase;
@@ -878,17 +876,17 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
         }
 
         .scale-note {
-            font-size: 0.72rem;
+            font-size: 0.68rem;
             color: var(--text-muted);
         }
 
         .ramp-wrap {
             position: relative;
-            padding-bottom: 22px;
+            padding-bottom: 16px;
         }
 
         .ramp-bar {
-            height: 14px;
+            height: 10px;
             border-radius: 999px;
             width: 100%;
             background: linear-gradient(
@@ -917,10 +915,10 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
         .ramp-ticks {
             position: relative;
             width: 100%;
-            height: 18px;
-            margin-top: 4px;
+            height: 14px;
+            margin-top: 2px;
             font-family: var(--font-mono);
-            font-size: 0.7rem;
+            font-size: 0.66rem;
             color: var(--text-secondary);
         }
 
@@ -930,7 +928,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             display: flex;
             flex-direction: column;
             align-items: center;
-            line-height: 1.1;
+            line-height: 1;
         }
 
         .ramp-tick:first-child {
@@ -944,62 +942,62 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
         .ramp-tick::before {
             content: '';
             width: 1px;
-            height: 5px;
+            height: 4px;
             background: var(--text-muted);
-            margin-bottom: 3px;
+            margin-bottom: 2px;
         }
 
         .tier-cards {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
-            gap: 10px;
+            gap: 8px;
         }
 
         .tier-card {
             background: var(--bg-card-inner);
             border: 1px solid var(--border-subtle);
-            border-radius: 8px;
-            padding: 10px 12px;
+            border-radius: 7px;
+            padding: 6px 10px;
             display: flex;
             flex-direction: column;
-            gap: 3px;
+            gap: 1px;
         }
 
         .tier-card-head {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 7px;
             font-weight: 600;
-            font-size: 0.85rem;
+            font-size: 0.78rem;
             color: #FFFFFF;
         }
 
         .tier-swatch {
-            width: 11px;
-            height: 11px;
-            border-radius: 3px;
+            width: 10px;
+            height: 10px;
+            border-radius: 2.5px;
             flex-shrink: 0;
         }
 
         .tier-range {
             font-family: var(--font-mono);
-            font-size: 0.74rem;
+            font-size: 0.69rem;
             color: var(--text-main);
-            padding-left: 19px;
+            padding-left: 17px;
         }
 
         .tier-sub {
-            font-size: 0.69rem;
+            font-size: 0.64rem;
             color: var(--text-muted);
-            padding-left: 19px;
-            line-height: 1.3;
+            padding-left: 17px;
+            line-height: 1.2;
         }
 
         /* ---------------- DUAL MAP PANELS ---------------- */
         .maps-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 16px;
+            gap: 12px;
         }
 
         .maps-grid.single-interp {
@@ -1021,11 +1019,11 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
         .map-panel {
             background: var(--bg-card);
             border: 1px solid var(--border-subtle);
-            border-radius: 12px;
-            padding: 14px 16px 16px 16px;
+            border-radius: 10px;
+            padding: 10px 12px 12px 12px;
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 8px;
         }
 
         .map-panel-header {
@@ -1033,25 +1031,25 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
-            gap: 8px;
+            gap: 6px;
         }
 
         .map-panel-title {
             font-family: var(--font-mono);
-            font-size: 0.74rem;
+            font-size: 0.7rem;
             font-weight: 600;
-            letter-spacing: 0.09em;
+            letter-spacing: 0.08em;
             text-transform: uppercase;
             color: var(--text-secondary);
         }
 
         .map-panel-meta {
             font-family: var(--font-mono);
-            font-size: 0.71rem;
+            font-size: 0.68rem;
             color: var(--text-muted);
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
         }
 
         .mini-toggle-btn {
@@ -1059,7 +1057,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             border: 1px solid var(--border-strong);
             color: var(--text-main);
             font-family: var(--font-mono);
-            font-size: 0.66rem;
+            font-size: 0.64rem;
             padding: 2px 7px;
             border-radius: 4px;
             cursor: pointer;
@@ -1073,41 +1071,41 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
         .map-viewport {
             position: relative;
             width: 100%;
-            height: 460px;
+            height: 360px;
             border-radius: 8px;
             overflow: hidden;
-            border: 1px solid rgba(255, 255, 255, 0.07);
-            background: #090C10;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: #E5E7EB;
         }
 
         .maps-grid.single-interp .map-viewport,
         .maps-grid.single-nodes .map-viewport {
-            height: 540px;
+            height: 430px;
         }
 
         .leaflet-map {
             width: 100%;
             height: 100%;
-            background: #090C10 !important;
+            background: #E2E8F0 !important;
         }
 
-        /* Dark Leaflet Controls matching Image 2 */
+        /* Leaflet Controls */
         .leaflet-control-zoom {
             border: 1px solid var(--border-strong) !important;
             border-radius: 7px !important;
             overflow: hidden;
-            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5) !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35) !important;
         }
 
         .leaflet-control-zoom a {
             background: rgba(18, 23, 33, 0.92) !important;
-            color: #E5E7EB !important;
+            color: #F3F4F6 !important;
             border-bottom: 1px solid var(--border-subtle) !important;
-            width: 30px !important;
-            height: 30px !important;
-            line-height: 30px !important;
+            width: 28px !important;
+            height: 28px !important;
+            line-height: 28px !important;
             font-family: var(--font-mono) !important;
-            font-size: 15px !important;
+            font-size: 14px !important;
         }
 
         .leaflet-control-zoom a:hover {
@@ -1116,10 +1114,10 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
         }
 
         .leaflet-control-scale-line {
-            background: rgba(11, 14, 20, 0.78) !important;
-            border: 1px solid rgba(255, 255, 255, 0.35) !important;
+            background: rgba(15, 23, 42, 0.85) !important;
+            border: 1px solid rgba(255, 255, 255, 0.4) !important;
             border-top: none !important;
-            color: #D1D5DB !important;
+            color: #F8FAFC !important;
             font-family: var(--font-mono) !important;
             font-size: 10px !important;
             padding: 2px 6px !important;
@@ -1131,89 +1129,94 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
 
         .map-attr-pill {
             position: absolute;
-            right: 10px;
-            bottom: 10px;
+            right: 8px;
+            bottom: 8px;
             z-index: 650;
-            background: rgba(11, 14, 20, 0.82);
-            border: 1px solid var(--border-subtle);
-            border-radius: 6px;
-            padding: 4px 9px;
+            background: rgba(15, 23, 42, 0.88);
+            border: 1px solid var(--border-strong);
+            border-radius: 5px;
+            padding: 3px 8px;
             font-family: var(--font-sans);
-            font-size: 0.68rem;
-            color: var(--text-secondary);
+            font-size: 0.65rem;
+            color: #E2E8F0;
             pointer-events: none;
         }
 
         .nodes-legend-pill {
             position: absolute;
-            right: 10px;
-            bottom: 10px;
+            right: 8px;
+            bottom: 8px;
             z-index: 650;
-            background: rgba(11, 14, 20, 0.88);
+            background: rgba(15, 23, 42, 0.92);
             border: 1px solid var(--border-strong);
-            border-radius: 6px;
-            padding: 5px 10px;
+            border-radius: 5px;
+            padding: 4px 9px;
             display: flex;
             align-items: center;
-            gap: 10px;
-            font-size: 0.7rem;
-            color: var(--text-main);
+            gap: 9px;
+            font-size: 0.67rem;
+            color: #F8FAFC;
         }
 
         .nodes-legend-item {
             display: inline-flex;
             align-items: center;
-            gap: 5px;
+            gap: 4px;
         }
 
         .nodes-legend-dot {
-            width: 8px;
-            height: 8px;
+            width: 7px;
+            height: 7px;
             border-radius: 50%;
         }
 
         /* Survey Boundary Label */
-        .survey-boundary-label {
-            color: #9CA3AF;
+        .survey-boundary-label span {
+            display: inline-block;
+            background: rgba(15, 23, 42, 0.88);
+            color: #F8FAFC;
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            border-radius: 4px;
+            padding: 1px 6px;
             font-family: var(--font-sans);
-            font-size: 11px;
-            font-weight: 500;
+            font-size: 10.5px;
+            font-weight: 600;
             white-space: nowrap;
-            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
             pointer-events: none;
         }
 
-        /* Readout Card (Peak & Hover Cursor) matching Image 1 & 2 */
+        /* Readout Card (Peak & Hover Cursor) */
         .readout-card {
             background: rgba(13, 17, 24, 0.95);
-            border: 1px solid rgba(255, 255, 255, 0.18);
+            border: 1px solid rgba(255, 255, 255, 0.22);
             border-radius: 8px;
-            padding: 8px 12px;
-            min-width: 148px;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65);
+            padding: 6px 10px;
+            min-width: 142px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.55);
             pointer-events: none;
             font-family: var(--font-sans);
         }
 
         .readout-eyebrow {
             font-family: var(--font-mono);
-            font-size: 0.63rem;
+            font-size: 0.6rem;
             letter-spacing: 0.08em;
             text-transform: uppercase;
             color: var(--text-secondary);
-            margin-bottom: 2px;
+            margin-bottom: 1px;
         }
 
         .readout-val {
             font-family: var(--font-mono);
-            font-size: 1.08rem;
+            font-size: 0.98rem;
             font-weight: 700;
             color: #FFFFFF;
             line-height: 1.2;
         }
 
         .readout-val small {
-            font-size: 0.72rem;
+            font-size: 0.68rem;
             font-weight: 500;
             color: var(--text-secondary);
         }
@@ -1221,10 +1224,10 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
         .readout-sub {
             display: flex;
             align-items: center;
-            gap: 6px;
-            font-size: 0.7rem;
+            gap: 5px;
+            font-size: 0.66rem;
             color: #E5E7EB;
-            margin-top: 3px;
+            margin-top: 2px;
             white-space: nowrap;
         }
 
@@ -1237,31 +1240,31 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
 
         /* Node value pill on Measurement Nodes map */
         .node-val-label {
-            background: rgba(11, 14, 20, 0.88);
-            border: 1px solid rgba(255, 255, 255, 0.18);
+            background: rgba(15, 23, 42, 0.92);
+            border: 1px solid rgba(255, 255, 255, 0.25);
             border-radius: 4px;
             padding: 1px 5px;
             font-family: var(--font-mono);
-            font-size: 10px;
-            font-weight: 600;
-            color: #F3F4F6;
+            font-size: 9.5px;
+            font-weight: 700;
+            color: #F8FAFC;
             white-space: nowrap;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.45);
             pointer-events: none;
         }
 
         /* 40px Cluster Badge from Image 1 Spec (fill = highest reading inside) */
         .b15-cluster-badge {
-            width: 40px;
-            height: 40px;
+            width: 38px;
+            height: 38px;
             border-radius: 50%;
             border: 2px solid #0F1217;
-            box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.65), 0 4px 12px rgba(0, 0, 0, 0.65);
+            box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.8), 0 4px 10px rgba(0, 0, 0, 0.5);
             display: flex;
             align-items: center;
             justify-content: center;
             font-family: var(--font-mono);
-            font-size: 12px;
+            font-size: 11.5px;
             font-weight: 700;
             cursor: pointer;
             transition: transform 0.15s ease;
@@ -1275,25 +1278,25 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
         .stats-grid {
             display: grid;
             grid-template-columns: 1fr 1.15fr 1fr;
-            gap: 16px;
+            gap: 12px;
         }
 
         .stat-card {
             background: var(--bg-card);
             border: 1px solid var(--border-subtle);
-            border-radius: 12px;
-            padding: 16px 20px;
+            border-radius: 10px;
+            padding: 11px 15px;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            gap: 12px;
+            gap: 8px;
         }
 
         .stat-card-title {
             font-family: var(--font-mono);
-            font-size: 0.72rem;
+            font-size: 0.68rem;
             font-weight: 600;
-            letter-spacing: 0.1em;
+            letter-spacing: 0.09em;
             text-transform: uppercase;
             color: var(--text-secondary);
         }
@@ -1301,31 +1304,30 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
         .field-metrics-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 12px 20px;
+            gap: 6px 16px;
         }
 
         .field-metric-label {
-            font-size: 0.74rem;
+            font-size: 0.68rem;
             color: var(--text-secondary);
-            margin-bottom: 2px;
         }
 
         .field-metric-val {
             font-family: var(--font-mono);
-            font-size: 1.5rem;
+            font-size: 1.28rem;
             font-weight: 700;
             color: #FFFFFF;
             line-height: 1.15;
         }
 
         .stat-card-foot {
-            font-size: 0.72rem;
+            font-size: 0.66rem;
             color: var(--text-muted);
         }
 
         /* Risk Distribution Card */
         .risk-bar-stack {
-            height: 10px;
+            height: 8px;
             width: 100%;
             border-radius: 999px;
             overflow: hidden;
@@ -1341,21 +1343,21 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
         .risk-list {
             display: flex;
             flex-direction: column;
-            gap: 6px;
+            gap: 3px;
         }
 
         .risk-row {
             display: grid;
-            grid-template-columns: 1fr auto 54px;
+            grid-template-columns: 1fr auto 48px;
             align-items: center;
-            gap: 10px;
-            font-size: 0.78rem;
+            gap: 8px;
+            font-size: 0.72rem;
         }
 
         .risk-row-name {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 7px;
             color: var(--text-main);
         }
 
@@ -1374,14 +1376,14 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
         /* Annual Dose at Peak Card */
         .peak-annual-val {
             font-family: var(--font-mono);
-            font-size: 1.9rem;
+            font-size: 1.55rem;
             font-weight: 700;
             color: #FFFFFF;
             line-height: 1.1;
         }
 
         .peak-annual-val small {
-            font-size: 0.9rem;
+            font-size: 0.8rem;
             font-weight: 500;
             color: var(--text-secondary);
         }
@@ -1389,25 +1391,24 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
         .peak-annual-tier {
             display: flex;
             align-items: center;
-            gap: 7px;
-            font-size: 0.75rem;
+            gap: 6px;
+            font-size: 0.69rem;
             color: var(--text-secondary);
-            margin-top: 4px;
+            margin-top: 2px;
         }
 
         .limit-bars {
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            margin-top: 4px;
+            gap: 6px;
         }
 
         .limit-row-head {
             display: flex;
             justify-content: space-between;
-            font-size: 0.74rem;
+            font-size: 0.69rem;
             color: var(--text-secondary);
-            margin-bottom: 4px;
+            margin-bottom: 2px;
         }
 
         .limit-row-head strong {
@@ -1418,7 +1419,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
 
         .limit-track {
             width: 100%;
-            height: 6px;
+            height: 5px;
             border-radius: 999px;
             background: rgba(255, 255, 255, 0.08);
             overflow: hidden;
@@ -1443,7 +1444,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             background: #121721 !important;
         }
 
-        @media (max-width: 1080px) {
+        @media (max-width: 1024px) {
             .tier-cards {
                 grid-template-columns: repeat(3, 1fr);
             }
@@ -1454,30 +1455,21 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
                 grid-template-columns: 1fr;
             }
         }
-
-        @media (max-width: 640px) {
-            body {
-                padding: 12px;
-            }
-            .tier-cards {
-                grid-template-columns: 1fr 1fr;
-            }
-        }
     </style>
 </head>
 <body>
-    <div class="b15-wrapper">
+    <div class="b15-wrapper" id="b15RootWrapper">
         <!-- HEADER BAR -->
         <header class="b15-header">
             <div class="b15-title-group">
+                <h1 class="b15-title">Radiation dose map</h1>
                 <div class="b15-eyebrow">
-                    <span>ISOTOPER B15 · GROUND CONTROL</span>
+                    <span>ISOTOPER B15</span>
                     <button class="b15-badge" id="btnSourceToggle" title="Click to toggle between Full Google Sheet GM Data and 48-pt Sample Field">
                         <span class="b15-badge-dot" id="sourceDot"></span>
                         <span id="sourceBadgeText">FULL GM SHEET</span>
                     </button>
                 </div>
-                <h1 class="b15-title">Radiation dose map</h1>
             </div>
 
             <div class="b15-controls">
@@ -1505,8 +1497,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
                 </label>
 
                 <div class="seg-group" role="group" aria-label="Basemap tile style">
-                    <button class="seg-btn active" id="btnTileDark" onclick="setBasemapStyle('dark')">Dark</button>
-                    <button class="seg-btn" id="btnTileOsm" onclick="setBasemapStyle('osm')">OSM</button>
+                    <button class="seg-btn active" id="btnTileOsm" onclick="setBasemapStyle('osm')">OSM</button>
                     <button class="seg-btn" id="btnTileSat" onclick="setBasemapStyle('sat')">Satellite</button>
                 </div>
             </div>
@@ -1541,13 +1532,13 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
                     <span>▶ Apply &amp; Interpolate</span>
                 </button>
                 <button class="action-btn" id="btnPickCorners" onclick="startCornerPicking()">
-                    <span>✥ Pick 2 Corners on Map</span>
+                    <span>✥ Pick 2 Corners</span>
                 </button>
                 <button class="action-btn" onclick="resetMistCoordinates()">
                     <span>↺ MIST Default</span>
                 </button>
                 <button class="action-btn" id="btnSyncSheet" onclick="fetchFullGoogleSheet(true)">
-                    <span>⟳ Sync All Sheet Rows</span>
+                    <span>⟳ Sync Sheet</span>
                 </button>
                 <div class="feed-status" id="feedStatusText">
                     Ready
@@ -1590,7 +1581,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
                 </div>
                 <div class="map-viewport">
                     <div id="mapInterp" class="leaflet-map"></div>
-                    <div class="map-attr-pill" id="interpBasemapAttr">Leaflet · CARTO Dark Matter basemap</div>
+                    <div class="map-attr-pill" id="interpBasemapAttr">Leaflet · OpenStreetMap Standard</div>
                 </div>
             </div>
 
@@ -1651,7 +1642,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             <div class="stat-card">
                 <div>
                     <div class="stat-card-title">ANNUAL DOSE AT PEAK</div>
-                    <div class="peak-annual-val" style="margin-top: 8px;">
+                    <div class="peak-annual-val" style="margin-top: 4px;">
                         <span id="peakAnnualNum">--</span> <small>mSv/yr</small>
                     </div>
                     <div class="peak-annual-tier">
@@ -1691,7 +1682,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
         // =========================================================================
         const INITIAL = __INITIAL_PAYLOAD_JSON__;
         const CFG = INITIAL.config;
-        const STORAGE_KEY = 'isotoper_b15_survey_state_v3';
+        const STORAGE_KEY = 'isotoper_b15_survey_state_v4';
 
         const urlParams = new URLSearchParams(window.location.search);
         const requestedLayout = urlParams.get('layout') || INITIAL.defaultView || 'split';
@@ -1709,8 +1700,8 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
         let state = {
             dataSource: 'live', // 'live' (Full Google Sheet 1,082 valid rows) or 'sample' (48-node spec)
             scaleMode: 'continuous', // 'continuous' or 'stepped'
-            nodeDisplayMode: 'all', // 'all' (all 1,082 discrete points) or 'clusters' (40px highest-reading cluster badges)
-            basemap: 'dark',
+            nodeDisplayMode: 'all', // 'all' or 'clusters'
+            basemap: 'osm', // Default to OpenStreetMap (100% free, zero API key required)
             showHeat: true,
             showPoints: true,
             showPath: true,
@@ -1734,6 +1725,21 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
                 state.dataSource = saved.dataSource;
             }
         } catch (e) {}
+
+        // Notify parent iframe in index.html of exact content height so scrollbar never appears
+        function notifyParentHeight() {
+            try {
+                if (window.parent && window.parent !== window) {
+                    const wrapper = document.getElementById('b15RootWrapper');
+                    const h = Math.ceil((wrapper ? wrapper.getBoundingClientRect().height : document.body.scrollHeight) + 28);
+                    window.parent.postMessage({
+                        type: 'b15-iframe-resize',
+                        layout: requestedLayout,
+                        height: h,
+                    }, '*');
+                }
+            } catch (e) {}
+        }
 
         // =========================================================================
         // 2. COLOR & TIER FUNCTIONS (LOG10 AXIS 0.1 TO 30 µSV/H)
@@ -1828,24 +1834,24 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             });
 
             document.getElementById('feedStatusText').textContent =
-                `Full Sheet Loaded: ${state.liveReadings.length} valid pts (${state.zeroFiltered} zeros filtered from ${state.rawCount} rows)`;
+                `${state.liveReadings.length.toLocaleString()} valid pts (${state.zeroFiltered} zeros filtered)`;
         }
 
         // =========================================================================
-        // 4. LEAFLET DUAL MAPS INITIALIZATION
+        // 4. LEAFLET DUAL MAPS INITIALIZATION (100% FREE OSM DEFAULT, NO API KEY)
         // =========================================================================
         const TILE_URLS = {
-            dark: {
-                url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-                attr: 'Leaflet · CARTO Dark Matter basemap',
-            },
             osm: {
                 url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                attr: 'Leaflet · OpenStreetMap Standard basemap',
+                attr: 'Leaflet · OpenStreetMap Standard',
+                maxNativeZoom: 19,
+                maxZoom: 22,
             },
             sat: {
                 url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
                 attr: 'Leaflet · Esri World Imagery Satellite',
+                maxNativeZoom: 19,
+                maxZoom: 22,
             },
         };
 
@@ -1855,6 +1861,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
         let boundaryLayerInterp, boundaryLayerNodes;
         let pathLayerInterp, pathLayerNodes;
         let pointsLayerInterp, pointsLayerNodes;
+        let labelsLayerNodes;
         let peakLayerInterp;
         let cursorMarkerInterp = null;
         let isSyncingMaps = false;
@@ -1866,6 +1873,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             mapInterp = L.map('mapInterp', {
                 center: [centerLat, centerLon],
                 zoom: 18,
+                maxZoom: 22,
                 zoomControl: true,
                 attributionControl: false,
                 preferCanvas: true,
@@ -1874,6 +1882,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             mapNodes = L.map('mapNodes', {
                 center: [centerLat, centerLon],
                 zoom: 18,
+                maxZoom: 22,
                 zoomControl: true,
                 attributionControl: false,
                 preferCanvas: true,
@@ -1882,8 +1891,15 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(mapInterp);
             L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(mapNodes);
 
-            tileLayerInterp = L.tileLayer(TILE_URLS.dark.url, { maxZoom: 20 }).addTo(mapInterp);
-            tileLayerNodes = L.tileLayer(TILE_URLS.dark.url, { maxZoom: 20 }).addTo(mapNodes);
+            tileLayerInterp = L.tileLayer(TILE_URLS.osm.url, {
+                maxNativeZoom: TILE_URLS.osm.maxNativeZoom,
+                maxZoom: TILE_URLS.osm.maxZoom,
+            }).addTo(mapInterp);
+
+            tileLayerNodes = L.tileLayer(TILE_URLS.osm.url, {
+                maxNativeZoom: TILE_URLS.osm.maxNativeZoom,
+                maxZoom: TILE_URLS.osm.maxZoom,
+            }).addTo(mapNodes);
 
             boundaryLayerInterp = L.layerGroup().addTo(mapInterp);
             boundaryLayerNodes = L.layerGroup().addTo(mapNodes);
@@ -1891,6 +1907,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             pathLayerNodes = L.layerGroup().addTo(mapNodes);
             pointsLayerInterp = L.layerGroup().addTo(mapInterp);
             pointsLayerNodes = L.layerGroup().addTo(mapNodes);
+            labelsLayerNodes = L.layerGroup().addTo(mapNodes);
             peakLayerInterp = L.layerGroup().addTo(mapInterp);
 
             function syncMap(source, target) {
@@ -1904,6 +1921,12 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             syncMap(mapInterp, mapNodes);
             syncMap(mapNodes, mapInterp);
 
+            mapNodes.on('zoomend', () => {
+                if (state.nodeDisplayMode === 'all') {
+                    renderHotspotLabelsOnNodesMap();
+                }
+            });
+
             mapInterp.on('mousemove', onInterpMouseMove);
             mapInterp.on('mouseout', () => {
                 if (cursorMarkerInterp) {
@@ -1916,25 +1939,21 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             mapNodes.on('click', onMapClickForCorner);
 
             if (typeof ResizeObserver !== 'undefined') {
+                let resizeTimer = null;
                 const ro = new ResizeObserver(() => {
-                    mapInterp.invalidateSize();
-                    mapNodes.invalidateSize();
-                    const latMin = Math.min(state.bounds.lat1, state.bounds.lat2);
-                    const latMax = Math.max(state.bounds.lat1, state.bounds.lat2);
-                    const lonMin = Math.min(state.bounds.lon1, state.bounds.lon2);
-                    const lonMax = Math.max(state.bounds.lon1, state.bounds.lon2);
-                    const padded = L.latLngBounds([latMin, lonMin], [latMax, lonMax]).pad(0.18);
-                    isSyncingMaps = true;
-                    mapInterp.fitBounds(padded, { animate: false });
-                    mapNodes.fitBounds(padded, { animate: false });
-                    setTimeout(() => { isSyncingMaps = false; }, 100);
+                    notifyParentHeight();
+                    clearTimeout(resizeTimer);
+                    resizeTimer = setTimeout(() => {
+                        mapInterp.invalidateSize();
+                        mapNodes.invalidateSize();
+                    }, 80);
                 });
                 ro.observe(document.body);
             }
         }
 
         // =========================================================================
-        // 5. SPATIAL INTERPOLATION ENGINE (ALL 1,082+ NODES -> 56 × 38 GRID)
+        // 5. SPATIAL INTERPOLATION ENGINE (HOTSPOT-PRESERVING 56 × 38 GRID)
         // =========================================================================
         function getActiveReadings() {
             if (state.dataSource === 'sample') {
@@ -1962,7 +1981,6 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             const latSpan = Math.max(1e-6, latMax - latMin);
             const lonSpan = Math.max(1e-6, lonMax - lonMin);
 
-            // Serpentine flight grid proportional to N (e.g. 26 rows × 42 cols for 1,082 readings)
             const rows = state.dataSource === 'sample'
                 ? 6
                 : Math.max(2, Math.round(Math.sqrt(n * 0.62)));
@@ -2006,25 +2024,25 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             }
             state.nodes = nodes;
 
-            // Interpolate 56 × 38 grid inside [latMin..latMax, lonMin..lonMax]
+            // Local hotspot-preserving IDW + Gaussian interpolation onto 56 × 38 grid
             const G_ROWS = CFG.gridRows;
             const G_COLS = CFG.gridCols;
             const grid = [];
             let maxDose = -1;
             let peakCell = null;
 
-            const logDoses = new Float64Array(n);
+            const doses = new Float64Array(n);
             const normLats = new Float64Array(n);
             const normLons = new Float64Array(n);
             for (let k = 0; k < n; k++) {
-                logDoses[k] = Math.log10(Math.max(0.01, nodes[k].dose));
+                doses[k] = Math.max(0.01, nodes[k].dose);
                 normLats[k] = (nodes[k].lat - latMin) / latSpan;
                 normLons[k] = (nodes[k].lon - lonMin) / lonSpan;
             }
 
-            const sigma = n > 200 ? 0.045 : 0.135;
+            const sigma = n > 200 ? 0.028 : 0.11;
             const sigma2 = 2.0 * sigma * sigma;
-            const eps = n > 200 ? 0.0004 : 0.0012;
+            const eps = n > 200 ? 0.00003 : 0.0006;
 
             for (let r = 0; r < G_ROWS; r++) {
                 const rowArr = [];
@@ -2041,11 +2059,12 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
                         const dx = nx - normLons[k];
                         const dy = ny - normLats[k];
                         const d2 = dx * dx + dy * dy;
-                        const w = Math.exp(-d2 / sigma2) + 1.0 / Math.pow(d2 + eps, 1.45);
+                        if (n > 200 && d2 > 0.035) continue;
+                        const w = Math.exp(-d2 / sigma2) + 1.0 / Math.pow(d2 + eps, 2.15);
                         wSum += w;
-                        vSum += w * logDoses[k];
+                        vSum += w * doses[k];
                     }
-                    const dose = Math.pow(10.0, vSum / wSum);
+                    const dose = wSum > 0 ? (vSum / wSum) : 0.15;
                     rowArr.push(dose);
 
                     if (dose > maxDose) {
@@ -2112,7 +2131,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
                     data[idx] = rgb[0];
                     data[idx + 1] = rgb[1];
                     data[idx + 2] = rgb[2];
-                    data[idx + 3] = 208; // ~81.5% opacity
+                    data[idx + 3] = 206; // ~81% opacity
                 }
             }
             ctx.putImageData(imgData, 0, 0);
@@ -2121,17 +2140,17 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
 
         function bindNodePopup(marker, pt) {
             const popupHtml = `
-                <div style="font-family:var(--font-sans);min-width:215px;padding:2px;">
+                <div style="font-family:var(--font-sans);min-width:210px;padding:2px;">
                     <div style="font-family:var(--font-mono);font-size:0.68rem;color:#9CA3AF;text-transform:uppercase;">
                         NODE #${pt.id} · ${pt.tier.name.toUpperCase()}
                     </div>
-                    <div style="font-family:var(--font-mono);font-size:1.15rem;font-weight:700;color:#FFF;margin:3px 0;">
-                        ${formatDose(pt.dose)} <span style="font-size:0.75rem;color:#9CA3AF;">µSv/h</span>
+                    <div style="font-family:var(--font-mono);font-size:1.12rem;font-weight:700;color:#FFF;margin:3px 0;">
+                        ${formatDose(pt.dose)} <span style="font-size:0.74rem;color:#9CA3AF;">µSv/h</span>
                     </div>
-                    <div style="font-size:0.74rem;color:${pt.tier.color};font-weight:600;margin-bottom:6px;">
+                    <div style="font-size:0.73rem;color:${pt.tier.color};font-weight:600;margin-bottom:5px;">
                         ● ${pt.tier.name} · ${pt.annualMSv.toFixed(2)} mSv/yr
                     </div>
-                    <div style="font-family:var(--font-mono);font-size:0.7rem;color:#D1D5DB;line-height:1.5;border-top:1px solid rgba(255,255,255,0.1);padding-top:5px;">
+                    <div style="font-family:var(--font-mono);font-size:0.69rem;color:#D1D5DB;line-height:1.45;border-top:1px solid rgba(255,255,255,0.1);padding-top:4px;">
                         <div>CPM: ${pt.cpm} | CPS: ${pt.cps}</div>
                         ${pt.timestamp ? `<div>Time: ${pt.timestamp}</div>` : ''}
                         <div>Lat: ${pt.lat.toFixed(6)}°N</div>
@@ -2142,13 +2161,43 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             marker.bindPopup(popupHtml);
         }
 
+        function renderHotspotLabelsOnNodesMap() {
+            labelsLayerNodes.clearLayers();
+            if (state.nodeDisplayMode !== 'all' || state.nodes.length === 0) return;
+
+            const sortedHot = [...state.nodes]
+                .filter(pt => pt.dose >= 0.5)
+                .sort((a, b) => b.dose - a.dose);
+
+            const placedBoxes = [];
+            for (const pt of sortedHot) {
+                if (placedBoxes.length >= 14) break;
+                const pxPt = mapNodes.latLngToContainerPoint([pt.lat, pt.lon]);
+                const collide = placedBoxes.some(
+                    b => Math.abs(b.x - pxPt.x) < 58 && Math.abs(b.y - pxPt.y) < 22
+                );
+                if (collide) continue;
+                placedBoxes.push(pxPt);
+
+                L.marker([pt.lat, pt.lon], {
+                    icon: L.divIcon({
+                        className: '',
+                        html: `<span class="node-val-label">${formatDose(pt.dose)}</span>`,
+                        iconSize: [42, 16],
+                        iconAnchor: [-7, 8],
+                    }),
+                    interactive: false,
+                }).addTo(labelsLayerNodes);
+            }
+        }
+
         function renderMeasurementNodesLayer(latMin, latMax, lonMin, lonMax) {
             pointsLayerNodes.clearLayers();
+            labelsLayerNodes.clearLayers();
             const n = state.nodes.length;
             if (n === 0) return;
 
             if (state.nodeDisplayMode === 'clusters') {
-                // 40px Cluster Badges from Image 1 Spec: fill = highest reading inside, never the point count
                 const cRows = 5;
                 const cCols = 7;
                 const latStep = (latMax - latMin) / cRows;
@@ -2185,8 +2234,8 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
                         icon: L.divIcon({
                             className: '',
                             html: badgeHtml,
-                            iconSize: [40, 40],
-                            iconAnchor: [20, 20],
+                            iconSize: [38, 38],
+                            iconAnchor: [19, 19],
                         }),
                     }).addTo(pointsLayerNodes);
                     bindNodePopup(m, b.maxPt);
@@ -2194,20 +2243,19 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
                 return;
             }
 
-            // All Nodes Mode: Plot all 1,082+ points cleanly!
-            // Sort so Moderate/High/Severe render on top of Safe/Low points
+            // Plot all 1,082 discrete points; draw Safe/Low first, then Moderate/High/Severe on top
             const isDense = n > 200;
-            const baseRadius = isDense ? 4.2 : 7.0;
+            const orderedNodes = [...state.nodes].sort((a, b) => a.dose - b.dose);
 
-            state.nodes.forEach(pt => {
+            orderedNodes.forEach(pt => {
                 const isHot = pt.dose >= 0.5;
-                const r = isDense ? (pt.dose >= 10 ? 6.5 : (isHot ? 5.2 : baseRadius)) : 7.0;
+                const r = isDense ? (pt.dose >= 10 ? 6.2 : (isHot ? 5.0 : 3.8)) : 6.8;
 
                 if (!isDense || isHot) {
                     L.circleMarker([pt.lat, pt.lon], {
                         radius: r + 1.0,
-                        color: 'rgba(255, 255, 255, 0.55)',
-                        weight: 1,
+                        color: 'rgba(15, 23, 42, 0.75)',
+                        weight: 1.2,
                         fill: false,
                         interactive: false,
                     }).addTo(pointsLayerNodes);
@@ -2215,42 +2263,16 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
 
                 const marker = L.circleMarker([pt.lat, pt.lon], {
                     radius: r,
-                    color: '#0F1217',
-                    weight: isDense ? 1.4 : 2.0,
+                    color: '#0F172A',
+                    weight: isDense ? 1.2 : 1.8,
                     fillColor: pt.tier.color,
-                    fillOpacity: 1.0,
+                    fillOpacity: 0.96,
                 }).addTo(pointsLayerNodes);
 
                 bindNodePopup(marker, pt);
             });
 
-            // Place non-overlapping numeric dose labels on top hotspot nodes
-            const sortedHot = [...state.nodes]
-                .filter(pt => pt.dose >= 0.5)
-                .sort((a, b) => b.dose - a.dose);
-
-            const labeledCoords = [];
-            const minSepLat = (latMax - latMin) * 0.085;
-            const minSepLon = (lonMax - lonMin) * 0.11;
-
-            for (const pt of sortedHot) {
-                if (labeledCoords.length >= 16) break;
-                const tooClose = labeledCoords.some(
-                    o => Math.abs(o.lat - pt.lat) < minSepLat && Math.abs(o.lon - pt.lon) < minSepLon
-                );
-                if (tooClose) continue;
-                labeledCoords.push(pt);
-
-                L.marker([pt.lat, pt.lon], {
-                    icon: L.divIcon({
-                        className: '',
-                        html: `<span class="node-val-label">${formatDose(pt.dose)}</span>`,
-                        iconSize: [44, 18],
-                        iconAnchor: [-8, 9],
-                    }),
-                    interactive: false,
-                }).addTo(pointsLayerNodes);
-            }
+            renderHotspotLabelsOnNodesMap();
         }
 
         function renderMaps(fitCamera = false) {
@@ -2273,16 +2295,16 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
                 }).addTo(mapInterp);
             }
 
-            // 2. Dashed Survey Boundary Box + Label on both maps
+            // 2. Dashed Survey Boundary Box + Label on both maps (high contrast on OSM & Satellite)
             boundaryLayerInterp.clearLayers();
             boundaryLayerNodes.clearLayers();
 
             [boundaryLayerInterp, boundaryLayerNodes].forEach(layer => {
                 L.rectangle(surveyBounds, {
-                    color: '#9CA3AF',
-                    weight: 1.3,
-                    opacity: 0.75,
-                    dashArray: '5, 5',
+                    color: '#0F172A',
+                    weight: 2.0,
+                    opacity: 0.85,
+                    dashArray: '6, 5',
                     fill: false,
                     interactive: false,
                 }).addTo(layer);
@@ -2290,9 +2312,9 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
                 L.marker([latMax, lonMin], {
                     icon: L.divIcon({
                         className: 'survey-boundary-label',
-                        html: 'Survey boundary',
-                        iconSize: [110, 18],
-                        iconAnchor: [0, 20],
+                        html: '<span>Survey boundary</span>',
+                        iconSize: [120, 20],
+                        iconAnchor: [0, 22],
                     }),
                     interactive: false,
                 }).addTo(layer);
@@ -2304,17 +2326,17 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             if (state.showPath && state.nodes.length > 1) {
                 const latlngs = state.nodes.map(pt => [pt.lat, pt.lon]);
                 L.polyline(latlngs, {
-                    color: '#E5E7EB',
-                    weight: 1.0,
-                    opacity: 0.35,
+                    color: '#0F172A',
+                    weight: 1.1,
+                    opacity: 0.4,
                     dashArray: '3, 5',
                     interactive: false,
                 }).addTo(pathLayerInterp);
 
                 L.polyline(latlngs, {
-                    color: '#9CA3AF',
-                    weight: 1.0,
-                    opacity: 0.42,
+                    color: '#1E293B',
+                    weight: 1.2,
+                    opacity: 0.55,
                     dashArray: '4, 5',
                     interactive: false,
                 }).addTo(pathLayerNodes);
@@ -2326,11 +2348,11 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
                 const isDense = state.nodes.length > 200;
                 state.nodes.forEach(pt => {
                     L.circleMarker([pt.lat, pt.lon], {
-                        radius: isDense ? 1.9 : 2.8,
+                        radius: isDense ? 1.8 : 2.6,
                         color: '#0F1217',
                         weight: 0.9,
                         fillColor: '#FFFFFF',
-                        fillOpacity: isDense ? 0.75 : 0.95,
+                        fillOpacity: isDense ? 0.72 : 0.95,
                         interactive: false,
                     }).addTo(pointsLayerInterp);
                 });
@@ -2344,11 +2366,11 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             if (state.peakCell) {
                 const pk = state.peakCell;
                 L.circleMarker([pk.lat, pk.lon], {
-                    radius: 13,
+                    radius: 12,
                     color: '#FFFFFF',
                     weight: 2.2,
                     fillColor: pk.tier.color,
-                    fillOpacity: 0.9,
+                    fillOpacity: 0.92,
                     interactive: false,
                 }).addTo(peakLayerInterp);
 
@@ -2366,8 +2388,8 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
                     icon: L.divIcon({
                         className: '',
                         html: cardHtml,
-                        iconSize: [168, 68],
-                        iconAnchor: [180, 34],
+                        iconSize: [160, 62],
+                        iconAnchor: [172, 31],
                     }),
                     interactive: false,
                 }).addTo(peakLayerInterp);
@@ -2379,11 +2401,14 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
                 `${state.nodes.length.toLocaleString()} GM-tube readings · tier colors`;
 
             if (fitCamera) {
-                const padded = surveyBounds.pad(0.18);
+                const padded = surveyBounds.pad(0.14);
                 isSyncingMaps = true;
-                mapInterp.fitBounds(padded, { animate: true });
-                mapNodes.fitBounds(padded, { animate: true });
-                setTimeout(() => { isSyncingMaps = false; }, 350);
+                mapInterp.fitBounds(padded, { animate: false });
+                mapNodes.fitBounds(padded, { animate: false });
+                setTimeout(() => {
+                    isSyncingMaps = false;
+                    renderHotspotLabelsOnNodesMap();
+                }, 120);
             }
         }
 
@@ -2428,8 +2453,8 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
 
             const html = `
                 <div style="position:relative;">
-                    <div style="width:14px;height:14px;border-radius:50%;border:2px solid #FFF;background:${tier.color};transform:translate(-7px,-7px);box-shadow:0 0 8px rgba(0,0,0,0.8);"></div>
-                    <div class="readout-card" style="position:absolute;left:14px;top:-28px;">
+                    <div style="width:13px;height:13px;border-radius:50%;border:2px solid #FFF;background:${tier.color};transform:translate(-6.5px,-6.5px);box-shadow:0 0 8px rgba(0,0,0,0.8);"></div>
+                    <div class="readout-card" style="position:absolute;left:13px;top:-26px;">
                         <div class="readout-eyebrow">CELL ${c + 1} · ${r + 1}</div>
                         <div class="readout-val">${formatDose(dose)} <small>µSv/h</small></div>
                         <div class="readout-sub">
@@ -2559,6 +2584,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             computeNodesAndGrid();
             renderMaps(fitCamera);
             renderStatsCards();
+            notifyParentHeight();
         }
 
         function saveState() {
@@ -2600,7 +2626,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             saveState();
             recomputeAndRender(true);
             document.getElementById('feedStatusText').textContent =
-                `✓ Interpolated ${state.nodes.length.toLocaleString()} pts over [${state.bounds.lat1.toFixed(4)}, ${state.bounds.lon1.toFixed(4)}] → [${state.bounds.lat2.toFixed(4)}, ${state.bounds.lon2.toFixed(4)}]`;
+                `✓ Interpolated ${state.nodes.length.toLocaleString()} pts`;
         }
 
         function resetMistCoordinates() {
@@ -2612,7 +2638,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             saveState();
             recomputeAndRender(true);
             document.getElementById('feedStatusText').textContent =
-                '✓ Reset to MIST Campus default coordinates';
+                '✓ Reset to MIST Campus default';
         }
 
         function startCornerPicking() {
@@ -2620,15 +2646,15 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             if (state.pickingStep > 0) {
                 state.pickingStep = 0;
                 btn.classList.remove('picking');
-                btn.innerHTML = '<span>✥ Pick 2 Corners on Map</span>';
+                btn.innerHTML = '<span>✥ Pick 2 Corners</span>';
                 document.getElementById('feedStatusText').textContent = 'Picking cancelled';
                 return;
             }
             state.pickingStep = 1;
             btn.classList.add('picking');
-            btn.innerHTML = '<span>Click Corner 1 on Map...</span>';
+            btn.innerHTML = '<span>Click Corner 1...</span>';
             document.getElementById('feedStatusText').textContent =
-                'Click first corner (Start Lat/Lon) on either map';
+                'Click first corner (Start Lat/Lon) on map';
         }
 
         function onMapClickForCorner(e) {
@@ -2640,15 +2666,15 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
                 document.getElementById('inLat1').value = e.latlng.lat.toFixed(6);
                 document.getElementById('inLon1').value = e.latlng.lng.toFixed(6);
                 state.pickingStep = 2;
-                btn.innerHTML = '<span>Click Corner 2 on Map...</span>';
+                btn.innerHTML = '<span>Click Corner 2...</span>';
                 document.getElementById('feedStatusText').textContent =
-                    'Now click opposite corner (End Lat/Lon) on map';
+                    'Now click opposite corner (End Lat/Lon)';
             } else if (state.pickingStep === 2) {
                 document.getElementById('inLat2').value = e.latlng.lat.toFixed(6);
                 document.getElementById('inLon2').value = e.latlng.lng.toFixed(6);
                 state.pickingStep = 0;
                 btn.classList.remove('picking');
-                btn.innerHTML = '<span>✥ Pick 2 Corners on Map</span>';
+                btn.innerHTML = '<span>✥ Pick 2 Corners</span>';
                 applyUserCoordinates();
             }
         }
@@ -2670,11 +2696,10 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
 
         function setBasemapStyle(styleKey) {
             state.basemap = styleKey;
-            document.getElementById('btnTileDark').classList.toggle('active', styleKey === 'dark');
             document.getElementById('btnTileOsm').classList.toggle('active', styleKey === 'osm');
             document.getElementById('btnTileSat').classList.toggle('active', styleKey === 'sat');
 
-            const spec = TILE_URLS[styleKey] || TILE_URLS.dark;
+            const spec = TILE_URLS[styleKey] || TILE_URLS.osm;
             tileLayerInterp.setUrl(spec.url);
             tileLayerNodes.setUrl(spec.url);
             document.getElementById('interpBasemapAttr').textContent = spec.attr;
@@ -2701,7 +2726,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
 
         async function fetchFullGoogleSheet(manualClick = false) {
             const statusEl = document.getElementById('feedStatusText');
-            statusEl.textContent = 'Syncing all rows from Google Sheet...';
+            statusEl.textContent = 'Syncing Google Sheet...';
             try {
                 const resp = await fetch(INITIAL.sheetCsvUrl);
                 if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -2710,7 +2735,6 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
 
                 let zeroDropped = 0;
                 const valid = [];
-                // Skip header row (index 0)
                 for (let i = 1; i < lines.length; i++) {
                     const cols = parseCsvLine(lines[i]);
                     if (cols.length < 3) continue;
@@ -2739,11 +2763,11 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
                     if (manualClick) state.dataSource = 'live';
                     recomputeAndRender(false);
                     statusEl.textContent =
-                        `Full Sheet Synced: ${valid.length.toLocaleString()} valid pts (${zeroDropped} zero rows filtered from ${state.rawCount.toLocaleString()})`;
+                        `${valid.length.toLocaleString()} valid pts (${zeroDropped} zeros filtered)`;
                 }
             } catch (err) {
                 statusEl.textContent =
-                    `Loaded ${state.liveReadings.length.toLocaleString()} valid pts (${state.zeroFiltered} zeros filtered)`;
+                    `${state.liveReadings.length.toLocaleString()} valid pts (${state.zeroFiltered} zeros filtered)`;
             }
         }
 
@@ -2769,6 +2793,8 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             initMaps();
             recomputeAndRender(true);
             fetchFullGoogleSheet(false);
+            setTimeout(notifyParentHeight, 150);
+            setTimeout(notifyParentHeight, 500);
         });
     </script>
 </body>
@@ -2795,6 +2821,7 @@ def main():
     )
     args = parser.parse_args()
 
+    lat1, lon1, lat2, lon2 = args.lat1, args.lat1, args.lat2, args.lon2
     lat1, lon1, lat2, lon2 = args.lat1, args.lon1, args.lat2, args.lon2
 
     if args.interactive:

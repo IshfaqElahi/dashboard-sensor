@@ -650,7 +650,28 @@
         }
 
         .map-container {
-            min-height: 750px;
+            padding: 18px 20px;
+        }
+
+        .map-header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 14px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .map-header-row h2 {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+
+        .map-header-row .tab-buttons {
+            margin-bottom: 0;
         }
 
         .map-grid {
@@ -673,14 +694,17 @@
             border: 1px solid var(--border-color);
             border-radius: 10px;
             background: #0B0E14;
+            overflow: hidden;
+            display: block;
+            transition: height 0.15s ease;
         }
 
         .map-iframe {
-            height: 1080px;
+            height: 830px;
         }
 
         .single-map-iframe {
-            height: 1140px;
+            height: 900px;
         }
 
         .map-card {
@@ -1322,51 +1346,34 @@
 
             <div class="grid">
                 <div class="map-container">
-                    <h2>Geospatial Radiation Index</h2>
-
-                    <div class="tab-buttons">
-                        <button class="tab-button active" onclick="switchMapTab('both')">
-                            Split View Matrix
-                        </button>
-                        <button class="tab-button" onclick="switchMapTab('interpolated')">
-                            Interpolated Field
-                        </button>
-                        <button class="tab-button" onclick="switchMapTab('measurement')">
-                            Discrete Nodes
-                        </button>
+                    <div class="map-header-row">
+                        <h2>Geospatial Radiation Index</h2>
+                        <div class="tab-buttons">
+                            <button class="tab-button active" onclick="switchMapTab('both', this)">
+                                Split View Matrix
+                            </button>
+                            <button class="tab-button" onclick="switchMapTab('interpolated', this)">
+                                Interpolated Field
+                            </button>
+                            <button class="tab-button" onclick="switchMapTab('measurement', this)">
+                                Discrete Nodes
+                            </button>
+                        </div>
                     </div>
 
                     <div id="tab-both" class="tab-content active">
-                        <div class="map-info-box">
-                            <h3>Dual Canvas Mode · ISOTOPER B15 Ground Control</h3>
-                            <p><strong>Live Sync:</strong> Pulls GM-tube readings from Google Sheets API (zero-filtered) and interpolates across your selected Start → End Latitude/Longitude survey boundary.</p>
-                        </div>
-
-                        <iframe class="map-iframe" src="radiation_dispersion_map.html?layout=split"
-                            title="ISOTOPER B15 Dual Radiation Dose Map" loading="lazy"></iframe>
+                        <iframe id="iframe-split" class="map-iframe" src="radiation_dispersion_map.html?layout=split"
+                            scrolling="no" title="ISOTOPER B15 Dual Radiation Dose Map" loading="lazy"></iframe>
                     </div>
 
                     <div id="tab-interpolated" class="tab-content">
-                        <div class="map-info-box">
-                            <h3>Interpolated Distribution Matrix (56 × 38 Grid)</h3>
-                            <p>Log-scale continuous &amp; stepped-tier spatial interpolation inside the user-defined survey boundary.</p>
-                        </div>
-                        <iframe class="single-map-iframe" src="radiation_dispersion_map.html?layout=interpolated" title="Interpolated Map"
-                            loading="lazy"></iframe>
+                        <iframe id="iframe-interpolated" class="single-map-iframe" src="radiation_dispersion_map.html?layout=interpolated"
+                            scrolling="no" title="Interpolated Map" loading="lazy"></iframe>
                     </div>
 
                     <div id="tab-measurement" class="tab-content">
-                        <div class="map-info-box">
-                            <h3>Absolute Node Cartography</h3>
-                            <p>Discrete UAV GM-tube readings along the survey flight path colored by IAEA/ICRP dose tiers.</p>
-                        </div>
-                        <iframe class="single-map-iframe" src="radiation_map_light.html?layout=nodes" title="Measurement Map"
-                            loading="lazy"></iframe>
-                    </div>
-
-                    <div class="map-description" style="margin-top: 15px; font-size: 0.85rem;">
-                        <strong>SYSTEM NOTE:</strong> HTML canvas dependencies must be located within the root executing
-                        directory.
+                        <iframe id="iframe-nodes" class="single-map-iframe" src="radiation_map_light.html?layout=nodes"
+                            scrolling="no" title="Measurement Map" loading="lazy"></iframe>
                     </div>
                 </div>
             </div>
@@ -1451,13 +1458,33 @@
         let envData = null;
         let radData = null;
 
-        // ===== MAP TAB SWITCHING =====
-        function switchMapTab(tabName) {
+        // ===== MAP TAB SWITCHING & SEAMLESS IFRAME HEIGHT SYNC =====
+        function switchMapTab(tabName, btnEl) {
             document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
             document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
             document.getElementById('tab-' + tabName).classList.add('active');
-            event.target.classList.add('active');
+            if (btnEl) {
+                btnEl.classList.add('active');
+            } else if (typeof event !== 'undefined' && event.target) {
+                event.target.classList.add('active');
+            }
         }
+
+        window.addEventListener('message', (ev) => {
+            if (!ev.data || ev.data.type !== 'b15-iframe-resize') return;
+            const h = Number(ev.data.height);
+            if (!h || h < 500) return;
+            const mapByLayout = {
+                split: 'iframe-split',
+                interpolated: 'iframe-interpolated',
+                nodes: 'iframe-nodes',
+            };
+            const targetId = mapByLayout[ev.data.layout];
+            if (targetId) {
+                const el = document.getElementById(targetId);
+                if (el) el.style.height = h + 'px';
+            }
+        });
 
         // ===== DATA FETCHING =====
         async function fetchEnvData() {
