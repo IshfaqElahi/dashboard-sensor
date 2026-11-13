@@ -1,604 +1,2732 @@
-import folium
-import pandas as pd
-import numpy as np
-from folium.plugins import HeatMap, MarkerCluster, MeasureControl, MiniMap
-from folium import FeatureGroup, LayerControl
-import branca.colormap as cm
-import warnings
-warnings.filterwarnings('ignore')
+#!/usr/bin/env python3
+"""
+ISOTOPER B15 — Geospatial Radiation Dose Mapping & Interpolation Engine
+========================================================================
+Fetches live GM-counter telemetry from Google Sheets Apps Script macro,
+filters out zero/invalid readings, maps readings across a user-defined
+Latitude/Longitude survey bounding box along a UAV lawnmower flight path,
+interpolates a 56 × 38 (2,128-cell) dose distribution grid, and generates:
+  1. radiation_dispersion_map.html (Dual / Interpolated Distribution View)
+  2. radiation_map_light.html      (Discrete Measurement Nodes View)
 
+Both generated files include Folium/Leaflet free basemaps (CARTO Dark Matter,
+OpenStreetMap, CARTO Positron, Esri Satellite) and a live client-side
+interpolation & coordinate-entry engine so users can change Start/End
+Latitude & Longitude interactively in the browser at any time.
+"""
+
+import argparse
+import json
+import math
+import warnings
+from datetime import datetime, timezone
+from pathlib import Path
+
+import branca.colormap as cm
+import folium
+import numpy as np
+import pandas as pd
+import requests
+from folium import FeatureGroup, LayerControl
+
+warnings.filterwarnings("ignore")
+
+# ============================================================================
+# 1. UNIFIED CONFIGURATION (ISOTOPER B15 DEVELOPER HANDOFF SPEC)
+# ============================================================================
+
+GM_MACRO_URL = (
+    "https://script.google.com/macros/s/"
+    "AKfycbzCBRfLEIenGJcOjMiCfhb3aIdF_kop9LOhxdMUeVzn__Sl10te8O-uQcWIacMrw4WpWw/exec"
+)
+
+# Default Survey Boundary: MIST Campus, Mirpur Cantonment, Dhaka-1216
+DEFAULT_SURVEY_BOUNDS = {
+    "lat1": 23.837700,
+    "lon1": 90.357000,
+    "lat2": 23.838500,
+    "lon2": 90.357900,
+    "label": "MIST Campus, Mirpur Cantonment, Dhaka",
+}
+
+GRID_COLS = 56
+GRID_ROWS = 38
+ANNUAL_HOURS = 2000.0  # 8 h/day × 250 days/yr
+PUBLIC_LIMIT_MSV = 1.0
+WORKER_LIMIT_MSV = 20.0
+
+# Single source of truth for tiers, cut-offs, colors, and log10 ramp stops
+DOSE_CONFIG = {
+    "minLogDose": 0.1,
+    "maxLogDose": 30.0,
+    "annualHours": 2000,
+    "publicLimitMSv": 1.0,
+    "workerLimitMSv": 20.0,
+    "gridCols": GRID_COLS,
+    "gridRows": GRID_ROWS,
+    "tiers": [
+        {
+            "key": "safe",
+            "name": "Safe",
+            "min": 0.0,
+            "max": 0.20,
+            "rangeLabel": "< 0.20 µSv/h",
+            "annualLabel": "< 0.4 mSv/yr",
+            "meaning": "Natural background (0.10–0.15)",
+            "shortMeaning": "Natural background",
+            "color": "#22C55E",
+            "textColor": "#052E16",
+        },
+        {
+            "key": "low",
+            "name": "Low",
+            "min": 0.20,
+            "max": 0.50,
+            "rangeLabel": "0.20 – 0.50 µSv/h",
+            "annualLabel": "0.4 – 1 mSv/yr",
+            "meaning": "Within 1 mSv/yr public limit",
+            "shortMeaning": "Within public limit",
+            "color": "#A3E635",
+            "textColor": "#1A2E05",
+        },
+        {
+            "key": "moderate",
+            "name": "Moderate",
+            "min": 0.50,
+            "max": 3.00,
+            "rangeLabel": "0.50 – 3.0 µSv/h",
+            "annualLabel": "1 – 6 mSv/yr",
+            "meaning": "Above public limit",
+            "shortMeaning": "Above public limit",
+            "color": "#FACC15",
+            "textColor": "#422006",
+        },
+        {
+            "key": "high",
+            "name": "High",
+            "min": 3.00,
+            "max": 10.00,
+            "rangeLabel": "3.0 – 10 µSv/h",
+            "annualLabel": "6 – 20 mSv/yr",
+            "meaning": "Category A worker band",
+            "shortMeaning": "Category A worker band",
+            "color": "#F97316",
+            "textColor": "#431407",
+        },
+        {
+            "key": "severe",
+            "name": "Severe",
+            "min": 10.00,
+            "max": float("inf"),
+            "rangeLabel": "≥ 10 µSv/h",
+            "annualLabel": "> 20 mSv/yr",
+            "meaning": "Above 20 mSv/yr worker limit",
+            "shortMeaning": "Above worker limit",
+            "color": "#C81E1E",
+            "textColor": "#FFFFFF",
+        },
+    ],
+    "rampStops": [
+        {"dose": 0.1, "pos": 0.0, "color": "#16A34A"},
+        {"dose": 0.2, "pos": 0.1215, "color": "#84CC16"},
+        {"dose": 0.5, "pos": 0.2822, "color": "#FACC15"},
+        {"dose": 3.0, "pos": 0.5963, "color": "#F97316"},
+        {"dose": 10.0, "pos": 0.8074, "color": "#DC2626"},
+        {"dose": 30.0, "pos": 1.0, "color": "#B91C1C"},
+    ],
+}
+
+
+# ============================================================================
+# 2. COLOR & TIER UTILITIES
+# ============================================================================
+
+def get_tier_for_dose(dose_uSv_h: float) -> dict:
+    """Return the tier dictionary from DOSE_CONFIG for a given dose rate."""
+    for tier in DOSE_CONFIG["tiers"]:
+        if dose_uSv_h < tier["max"]:
+            return tier
+    return DOSE_CONFIG["tiers"][-1]
+
+
+def hex_to_rgb(hex_color: str) -> tuple:
+    h = hex_color.lstrip("#")
+    return tuple(int(h[i : i + 2], 16) for i in (0, 2, 4))
+
+
+def rgb_to_hex(rgb: tuple) -> str:
+    return "#{:02X}{:02X}{:02X}".format(
+        max(0, min(255, int(round(rgb[0])))),
+        max(0, min(255, int(round(rgb[1])))),
+        max(0, min(255, int(round(rgb[2])))),
+    )
+
+
+def dose_to_continuous_hex(dose_uSv_h: float) -> str:
+    """
+    Map dose rate (µSv/h) to continuous color ramp on a log10 axis
+    from 0.1 to 30 µSv/h, clamped at both ends:
+      position = log10(v / 0.1) / log10(300)
+    """
+    clamped = max(0.1, min(30.0, float(dose_uSv_h)))
+    pos = math.log10(clamped / 0.1) / math.log10(300.0)
+    stops = DOSE_CONFIG["rampStops"]
+
+    for i in range(len(stops) - 1):
+        s0, s1 = stops[i], stops[i + 1]
+        if pos <= s1["pos"] or i == len(stops) - 2:
+            span = s1["pos"] - s0["pos"]
+            t = 0.0 if span <= 0 else max(0.0, min(1.0, (pos - s0["pos"]) / span))
+            c0, c1 = hex_to_rgb(s0["color"]), hex_to_rgb(s1["color"])
+            rgb = (
+                c0[0] + (c1[0] - c0[0]) * t,
+                c0[1] + (c1[1] - c0[1]) * t,
+                c0[2] + (c1[2] - c0[2]) * t,
+            )
+            return rgb_to_hex(rgb)
+    return stops[-1]["color"]
+
+
+# ============================================================================
+# 3. LIVE GM COUNTER DATA FETCHING & ZERO-FILTERING
+# ============================================================================
 
 class RadiationData:
-    """Handles radiation measurement data from GM tube detector"""
+    """
+    Fetches GM-tube detector readings from the Google Sheets Apps Script macro,
+    filters out zero/invalid readings, assigns coordinates across a user-defined
+    bounding box along a serpentine UAV flight path, and performs 2D spatial
+    interpolation onto a 56 × 38 grid.
+    """
 
-    def __init__(self):
-        # Sample data - Replace with actual measurements
-        # Format: [longitude, latitude, radiation_μSv_h]
-        self.data_points = [
-            [90.35718591116404, 23.837775061102857, 0.4385],
-            [90.35789165161599, 23.83827828945288, 0.00],
-            [90.35706162131505, 23.838201481146786, 0.00],
-            [90.35770007023059, 23.837719225607806, 0.00]
+    def __init__(
+        self,
+        lat1: float = DEFAULT_SURVEY_BOUNDS["lat1"],
+        lon1: float = DEFAULT_SURVEY_BOUNDS["lon1"],
+        lat2: float = DEFAULT_SURVEY_BOUNDS["lat2"],
+        lon2: float = DEFAULT_SURVEY_BOUNDS["lon2"],
+        api_url: str = GM_MACRO_URL,
+    ):
+        self.api_url = api_url
+        self.lat_min = min(float(lat1), float(lat2))
+        self.lat_max = max(float(lat1), float(lat2))
+        self.lon_min = min(float(lon1), float(lon2))
+        self.lon_max = max(float(lon1), float(lon2))
 
-        ]
+        self.raw_count = 0
+        self.zero_filtered_count = 0
+        self.readings = []
+        self.nodes = []
+        self.grid_matrix = None
+        self.fetch_And_process()
+
+    def fetch_And_process(self):
+        """Fetch live GM data from Google Sheets macro and filter out <= 0 readings."""
+        raw_items = []
+        try:
+            print(f"[INFO] Fetching GM counter data from Google Sheets macro...")
+            resp = requests.get(self.api_url, timeout=15)
+            resp.raise_for_status()
+            payload = resp.json()
+
+            if isinstance(payload, dict):
+                history = payload.get("history", [])
+                if isinstance(history, list) and len(history) > 0:
+                    raw_items = history
+                elif "latest" in payload and isinstance(payload["latest"], dict):
+                    raw_items = [payload["latest"]]
+            elif isinstance(payload, list):
+                raw_items = payload
+        except Exception as exc:
+            print(f"[WARN] Could not reach live GM macro ({exc}). Using fallback readings.")
+
+        self.raw_count = len(raw_items)
+        valid_readings = []
+        zero_count = 0
+
+        for idx, item in enumerate(raw_items):
+            try:
+                dose = float(item.get("dose", 0) or 0)
+                cpm = float(item.get("cpm", 0) or 0)
+                cps = float(item.get("cps", 0) or 0)
+            except (TypeError, ValueError):
+                zero_count += 1
+                continue
+
+            # Filter out zero or negative radiation readings (including cps <= 0) as requested
+            if math.isnan(dose) or dose <= 0.0 or cpm <= 0.0 or cps <= 0.0:
+                zero_count += 1
+                continue
+
+            valid_readings.append(
+                {
+                    "id": len(valid_readings) + 1,
+                    "dose": round(dose, 4),
+                    "cpm": round(cpm, 1),
+                    "cps": round(cps, 3),
+                    "status": str(item.get("status", "")).strip() or get_tier_for_dose(dose)["name"],
+                    "timestamp": str(item.get("timestamp", datetime.now(timezone.utc).isoformat())),
+                }
+            )
+
+        self.zero_filtered_count = zero_count
+
+        # Fallback if all sheet rows were empty/zero or offline
+        if not valid_readings:
+            fallback_doses = [
+                0.3004, 0.2923, 0.2761, 0.2680, 0.2598, 0.2030, 0.2111, 0.1949,
+                0.2030, 0.1868, 0.1786, 0.2111, 0.2355, 0.2517, 0.2842, 0.3167,
+                0.3492, 0.3816, 0.4222, 0.4060, 0.4385, 0.3979, 0.3654, 0.3329,
+                0.3086, 0.2923, 0.3167, 0.3248, 0.3329, 0.3410, 0.3816, 0.4222,
+                0.4060, 0.4222, 0.3979, 0.4060,
+            ]
+            for i, d in enumerate(fallback_doses):
+                valid_readings.append(
+                    {
+                        "id": i + 1,
+                        "dose": d,
+                        "cpm": round(d / 0.00812, 1),
+                        "cps": round((d / 0.00812) / 60.0, 2),
+                        "status": get_tier_for_dose(d)["name"],
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
+
+        self.readings = valid_readings
+        print(
+            f"[INFO] GM Data Loaded: {self.raw_count} raw rows | "
+            f"{self.zero_filtered_count} zero/invalid filtered | "
+            f"{len(self.readings)} valid readings retained."
+        )
+        self.assign_coordinates_and_interpolate()
+
+    def assign_coordinates_and_interpolate(self):
+        """
+        Distribute the valid GM readings along a serpentine (lawnmower) UAV survey
+        path inside [lat_min..lat_max, lon_min..lon_max] and compute the 56 × 38
+        interpolated grid.
+        """
+        n = len(self.readings)
+        # Determine serpentine grid rows & columns proportional to aspect ratio
+        rows = max(2, min(10, int(round(math.sqrt(n * 0.75)))))
+        cols = max(2, int(math.ceil(n / rows)))
+
+        lat_span = max(1e-6, self.lat_max - self.lat_min)
+        lon_span = max(1e-6, self.lon_max - self.lon_min)
+
+        # Inset nodes slightly (6%) from the dashed survey boundary border
+        pad_lat = lat_span * 0.06
+        pad_lon = lon_span * 0.06
+        inner_lat_min = self.lat_min + pad_lat
+        inner_lat_max = self.lat_max - pad_lat
+        inner_lon_min = self.lon_min + pad_lon
+        inner_lon_max = self.lon_max - pad_lon
+
+        nodes = []
+        for idx, r in enumerate(self.readings):
+            row_idx = idx // cols
+            col_in_row = idx % cols
+            # How many points actually sit on this row
+            pts_in_this_row = min(cols, n - row_idx * cols)
+
+            # Top-to-bottom latitude progression
+            lat_t = 0.5 if rows == 1 else row_idx / float(rows - 1)
+            lat = inner_lat_max - lat_t * (inner_lat_max - inner_lat_min)
+
+            # Serpentine (boustrophedon) left-to-right on even rows, right-to-left on odd rows
+            lon_t = 0.5 if pts_in_this_row <= 1 else col_in_row / float(pts_in_this_row - 1)
+            if row_idx % 2 == 1:
+                lon_t = 1.0 - lon_t
+            lon = inner_lon_min + lon_t * (inner_lon_max - inner_lon_min)
+
+            tier = get_tier_for_dose(r["dose"])
+            nodes.append(
+                {
+                    "id": idx + 1,
+                    "lat": round(lat, 7),
+                    "lon": round(lon, 7),
+                    "dose": r["dose"],
+                    "cpm": r["cpm"],
+                    "cps": r["cps"],
+                    "status": r["status"],
+                    "tierKey": tier["key"],
+                    "tierName": tier["name"],
+                    "color": tier["color"],
+                    "annualMSv": round(r["dose"] * (ANNUAL_HOURS / 1000.0), 3),
+                    "timestamp": r["timestamp"],
+                }
+            )
+
+        self.nodes = nodes
+
+        # Interpolate onto 56 × 38 grid inside the survey boundary using IDW in log10 space
+        grid_lats = np.linspace(self.lat_max, self.lat_min, GRID_ROWS)
+        grid_lons = np.linspace(self.lon_min, self.lon_max, GRID_COLS)
+        lon_mesh, lat_mesh = np.meshgrid(grid_lons, grid_lats)
+
+        node_lats = np.array([pt["lat"] for pt in nodes])[:, None, None]
+        node_lons = np.array([pt["lon"] for pt in nodes])[:, None, None]
+        node_log_doses = np.log10(np.maximum(0.01, np.array([pt["dose"] for pt in nodes])))[:, None, None]
+
+        # Normalize coordinates to unit square so aspect ratio doesn't skew kernel
+        dy = (lat_mesh[None, :, :] - node_lats) / lat_span
+        dx = (lon_mesh[None, :, :] - node_lons) / lon_span
+        dist_sq = dx * dx + dy * dy
+
+        # Smooth Gaussian + IDW hybrid weights for natural plume/field appearance
+        sigma = 0.14
+        weights = np.exp(-dist_sq / (2.0 * sigma * sigma)) + 1.0 / (
+            np.power(dist_sq + 0.0015, 1.35)
+        )
+        interp_log = np.sum(weights * node_log_doses, axis=0) / np.sum(weights, axis=0)
+        self.grid_matrix = np.power(10.0, interp_log)
 
     def get_dataframe(self):
-        """Convert data to pandas DataFrame with statistics"""
-        df = pd.DataFrame(self.data_points,
-                         columns=['Longitude', 'Latitude', 'Radiation_μSv_h'])
+        """Return pandas DataFrame of measurement nodes and summary statistics."""
+        df = pd.DataFrame(self.nodes)
+        df["Longitude"] = df["lon"]
+        df["Latitude"] = df["lat"]
+        df["Radiation_μSv_h"] = df["dose"]
+
+        grid_flat = self.grid_matrix.ravel()
         stats = {
-            'mean': df['Radiation_μSv_h'].mean(),
-            'std': df['Radiation_μSv_h'].std(),
-            'max': df['Radiation_μSv_h'].max(),
-            'min': df['Radiation_μSv_h'].min(),
-            'median': df['Radiation_μSv_h'].median()
+            "mean": float(np.mean(grid_flat)),
+            "std": float(np.std(grid_flat)),
+            "max": float(np.max(grid_flat)),
+            "min": float(np.min(grid_flat)),
+            "median": float(np.median(grid_flat)),
+            "grid_cells": int(grid_flat.size),
+            "node_count": int(len(self.nodes)),
         }
         return df, stats
 
-    def get_heatmap_data(self):
-        """Format data for heatmap visualization"""
-        df, _ = self.get_dataframe()
-        return [[row['Latitude'], row['Longitude'], row['Radiation_μSv_h']]
-                for _, row in df.iterrows()]
+
+# ============================================================================
+# 4. REFERENCE SAMPLE FIELD (48-POINT MULTI-TIER SPEC FROM DESIGN HANDOFF)
+# ============================================================================
+
+# Exact 48-reading 8×6 lawnmower grid from the ISOTOPER B15 design specification
+SAMPLE_FIELD_DOSES = [
+    # Row 1 (L -> R)
+    0.112, 0.125, 0.142, 0.158, 0.164, 0.149, 0.131, 0.118,
+    # Row 2 (R -> L)
+    0.145, 8.870, 2.980, 0.617, 0.185, 1.110, 0.192, 0.134,
+    # Row 3 (L -> R)
+    0.156, 0.735, 2.250, 8.440, 23.20, 17.80, 0.195, 0.148,
+    # Row 4 (R -> L)
+    0.162, 3.320, 16.20, 13.20, 5.160, 1.450, 0.245, 0.152,
+    # Row 5 (L -> R)
+    0.175, 1.440, 4.080, 7.150, 4.960, 0.643, 0.285, 0.160,
+    # Row 6 (R -> L)
+    0.138, 0.182, 0.295, 1.170, 2.310, 1.750, 0.783, 0.215,
+]
 
 
-def assess_risk_corrected(radiation_level):
-    """
-    Risk assessment based on IAEA GSG-8 and ICRP 103 standards
-    Natural background: 0.1-0.15 μSv/h
-    """
-    if radiation_level < 0.15:
-        return {
-            "level": "SAFE",
-            "color": "green",
-            "action": "No restrictions needed",
-            "description": "Within natural background range"
-        }
-    elif radiation_level < 0.3:
-        return {
-            "level": "LOW",
-            "color": "yellow",
-            "action": "Monitor regularly",
-            "description": "Slightly above natural background"
-        }
-    elif radiation_level < 0.5:
-        return {
-            "level": "MODERATE",
-            "color": "orange",
-            "action": "Investigate possible sources",
-            "description": "Above normal levels"
-        }
-    elif radiation_level < 1.0:
-        return {
-            "level": "HIGH",
-            "color": "red",
-            "action": "Restrict prolonged access",
-            "description": "Requires attention"
-        }
-    else:
-        return {
-            "level": "SEVERE",
-            "color": "purple",
-            "action": "Immediate action required",
-            "description": "Emergency situation"
-        }
-
-def calculate_exposure_safety(radiation_level):
-    """
-    Calculate safe exposure times based on international limits:
-    Public: 1000 μSv/year (1 mSv/year)
-    Workers: 20000 μSv/year (20 mSv/year)
-    """
-    if radiation_level <= 0:
-        return {"status": "No radiation detected"}
-
-    # Annual limits in microsieverts
-    PUBLIC_LIMIT = 1000    # 1 mSv
-    WORKER_LIMIT = 20000   # 20 mSv
-
-    # Hours to reach annual limit at this radiation level
-    hours_to_public_limit = PUBLIC_LIMIT / radiation_level
-    hours_to_worker_limit = WORKER_LIMIT / radiation_level
-
-    # Convert to days (8 hours/day exposure) # Assuming 8 hours/day exposure for calculation purposes
-    days_to_public_limit = hours_to_public_limit / 8
-    days_to_worker_limit = hours_to_worker_limit / 8
-
-    # Calculate annual dose for typical exposure (8hr/day, 250 days)
-    annual_dose_8hr = radiation_level * 8 * 250
-
-    return {
-        "public_safety": f"Safe for {days_to_public_limit:.0f} days (8hr/day)",
-        "worker_safety": f"Safe for {days_to_worker_limit:.0f} days (8hr/day)",
-        "annual_dose_estimate": f"{annual_dose_8hr:.0f} μSv/year",
-        "percent_of_public_limit": f"{(annual_dose_8hr/PUBLIC_LIMIT)*100:.1f}%",
-        "percent_of_worker_limit": f"{(annual_dose_8hr/WORKER_LIMIT)*100:.1f}%"
-    }
-
-
+# ============================================================================
+# 5. FOLIUM BASE LAYER + INTERACTIVE HTML APPLICATION GENERATOR
+# ============================================================================
 
 class RadiationMapGenerator:
-    """Creates interactive radiation maps with risk assessment"""
+    """
+    Generates the redesigned ISOTOPER B15 geospatial radiation HTML artifacts:
+      - radiation_dispersion_map.html (Dual / Interpolated Distribution View)
+      - radiation_map_light.html      (Discrete Measurement Nodes View)
+    """
 
-    def __init__(self, center_lat=23.8103, center_lon=90.4125):
-        self.center_lat = center_lat
-        self.center_lon = center_lon
-        self.radiation_data = RadiationData()
+    def __init__(
+        self,
+        lat1: float = DEFAULT_SURVEY_BOUNDS["lat1"],
+        lon1: float = DEFAULT_SURVEY_BOUNDS["lon1"],
+        lat2: float = DEFAULT_SURVEY_BOUNDS["lat2"],
+        lon2: float = DEFAULT_SURVEY_BOUNDS["lon2"],
+    ):
+        self.radiation_data = RadiationData(lat1=lat1, lon1=lon1, lat2=lat2, lon2=lon2)
+        self.center_lat = (self.radiation_data.lat_min + self.radiation_data.lat_max) / 2.0
+        self.center_lon = (self.radiation_data.lon_min + self.radiation_data.lon_max) / 2.0
 
-    def create_base_map(self):
-        """Initialize the base map with Google Maps light theme"""
-        # Create base map with OpenStreetMap as default
-        radiation_map = folium.Map(
-            location=[self.center_lat, self.center_lon],
-            zoom_start=17,
-            tiles='OpenStreetMap',
-            control_scale=True,
-            width='100%',
-            height='90%'
-        )
-
-        # Add Google Maps layers (light theme)
-        # Note: For Google Maps tiles, you need to sign up for Google Maps API
-        # Here's an alternative using OpenStreetMap light themes
-
-        # Light theme options
-        folium.TileLayer(
-            tiles='https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-            attr='© OpenStreetMap contributors, © CARTO',
-            name='Light Theme',
-            control=True
-        ).add_to(radiation_map)
-
-        # CartoDB Positron (very clean light theme)
-        folium.TileLayer('CartoDB positron', name='Positron Light').add_to(radiation_map)
-
-        # Stamen Toner Lite (another light theme)
-        folium.TileLayer(
-            tiles='Stamen Toner',
-            name='Toner Light',
-            attr='Map tiles by Stamen Design, under CC BY 3.0. Data by OpenStreetMap, under ODbL.',
-            control=True
-        ).add_to(radiation_map)
-
-        # Add regular OpenStreetMap
-        folium.TileLayer('OpenStreetMap', name='Standard Map').add_to(radiation_map)
-
-        # Add satellite view
-        folium.TileLayer(
-            tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-            attr='Esri',
-            name='Satellite',
-            control=True
-        ).add_to(radiation_map)
-
-        # Set Light Theme as default
-        folium.TileLayer(
-            tiles='https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-            attr='© OpenStreetMap contributors, © CARTO',
-            name='Light Theme',
-            control=False
-        ).add_to(radiation_map)
-
-        # Add tools
-        MiniMap(toggle_display=True, tile_layer='CartoDB positron').add_to(radiation_map)
-        MeasureControl(position='topleft').add_to(radiation_map)
-
-        return radiation_map
-
-    def create_google_style_map(self):
-        """Alternative method with Google Maps-like appearance"""
-        # Create map with CartoDB Positron (closest to Google Maps light theme)
-        google_style_map = folium.Map(
-            location=[self.center_lat, self.center_lon],
-            zoom_start=17,
-            tiles='CartoDB positron',  # This looks very similar to Google Maps
-            attr='© OpenStreetMap contributors, © CARTO',
-            control_scale=True,
-            width='100%',
-            height='90%'
-        )
-
-        # Add other layers as options
-        folium.TileLayer('OpenStreetMap', name='Street View').add_to(google_style_map)
-        folium.TileLayer(
-            tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-            attr='Esri',
-            name='Satellite View',
-            control=True
-        ).add_to(google_style_map)
-
-        # Add terrain layer for variety
-        folium.TileLayer(
-            tiles='Stamen Terrain',
-            name='Terrain',
-            attr='Map tiles by Stamen Design, under CC BY 3.0. Data by OpenStreetMap, under ODbL.',
-            control=True
-        ).add_to(google_style_map)
-
-        # Add tools
-        MiniMap(toggle_display=True, tile_layer='CartoDB positron').add_to(google_style_map)
-        MeasureControl(position='topleft').add_to(google_style_map)
-
-        return google_style_map
-
-    def add_heatmap_layer(self, map_obj):
-        """Add radiation heatmap"""
-        heatmap_data = self.radiation_data.get_heatmap_data()
-
-        heatmap = HeatMap(
-            heatmap_data,
-            name='Radiation Heatmap',
-            min_opacity=0.3,
-            max_opacity=0.8,
-            radius=25,
-            blur=15,
-            gradient={
-                0.1: 'green',    # Background
-                0.2: 'yellow',   # Low
-                0.3: 'orange',   # Moderate
-                0.4: 'red',      # High
-                0.5: 'purple'    # Severe
-            }
-        )
-
-        heatmap_group = FeatureGroup(name='Radiation Heatmap', show=True)
-        heatmap_group.add_child(heatmap)
-        map_obj.add_child(heatmap_group)
-
-        return map_obj
-
-    def add_measurement_points(self, map_obj):
-        """Add interactive measurement markers"""
-        df, _ = self.radiation_data.get_dataframe()
-
-        marker_cluster = MarkerCluster(
-            name='Measurement Points',
-            options={'showCoverageOnHover': True}
-        ).add_to(map_obj)
-
-        for idx, row in df.iterrows():
-            risk = assess_risk_corrected(row['Radiation_μSv_h'])
-            safety = calculate_exposure_safety(row['Radiation_μSv_h'])
-
-            # Determine safety message based on radiation level
-            safety_info_html = ""
-            if 'status' in safety:
-                safety_info_html = f"<p><b>Safety Info:</b> {safety['status']}</p>"
-            else:
-                safety_info_html = f"""
-                <p><b>Public Safety:</b> {safety['public_safety']}</p>
-                <p><b>Worker Safety:</b> {safety['worker_safety']}</p>
-                """
-
-            # Create detailed popup
-            popup_html = f"""
-            <div style="font-family: Arial; width: 280px;">
-                <h4 style="color: {risk['color']}; margin: 5px 0;">
-                     Point {idx+1} - {risk['level']}
-                </h4>
-                <hr style="margin: 5px 0;">
-                <p><b>Radiation Level:</b> {row['Radiation_μSv_h']:.3f} μSv/h</p>
-                <p><b>Risk Assessment:</b> {risk['description']}</p>
-                <p><b>Recommended Action:</b> {risk['action']}</p>
-                {safety_info_html}
-                <p><b>Coordinates:</b><br>
-                {row['Latitude']:.6f}°N, {row['Longitude']:.6f}°E</p>
-                <hr style="margin: 5px 0;">
-                <small>GM Tube Detector • University Research Project</small>
-            </div>
-            """
-
-            # Add marker with popup
-            folium.CircleMarker(
-                location=[row['Latitude'], row['Longitude']],
-                radius=8,
-                popup=folium.Popup(popup_html, max_width=300),
-                color=risk['color'],
-                fill=True,
-                fill_color=risk['color'],
-                fill_opacity=0.7,
-                weight=2
-            ).add_to(marker_cluster)
-
-        return map_obj
-
-    def add_risk_zones(self, map_obj):
-        """Add visual risk zone overlays"""
-        df, _ = self.radiation_data.get_dataframe()
-        risk_group = FeatureGroup(name='Risk Zones', show=False)
-
-        for _, row in df.iterrows():
-            risk = assess_risk_corrected(row['Radiation_μSv_h'])
-
-            # Determine zone radius based on risk level
-            zone_sizes = {
-                'SAFE': 10, 'LOW': 20,
-                'MODERATE': 30, 'HIGH': 40, 'SEVERE': 50
-            }
-            radius = zone_sizes[risk['level']]
-
-            # Create risk zone circle
-            folium.Circle(
-                location=[row['Latitude'], row['Longitude']],
-                radius=radius,
-                color=risk['color'],
-                fill=True,
-                fill_opacity=0.15,
-                weight=2,
-                popup=f"<b>{risk['level']} Risk Zone</b><br>{risk['description']}"
-            ).add_to(risk_group)
-
-        map_obj.add_child(risk_group)
-        return map_obj
-
-    def add_statistics_panel(self, map_obj):
-        """Add statistics panel to map"""
-        df, stats = self.radiation_data.get_dataframe()
-
-        # Count risk levels
-        risk_counts = {'SAFE': 0, 'LOW': 0, 'MODERATE': 0, 'HIGH': 0, 'SEVERE': 0}
-        for _, row in df.iterrows():
-            risk = assess_risk_corrected(row['Radiation_μSv_h'])
-            risk_counts[risk['level']] += 1
-
-        # Create statistics HTML
-        stats_html = f"""
-        <div style="
-            position: fixed;
-            top: 10px;
-            right: 10px;
-            width: 320px;
-            background: white;
-            border: 2px solid #2c3e50;
-            border-radius: 5px;
-            padding: 10px;
-            font-family: Arial;
-            font-size: 12px;
-            z-index: 9999;
-            opacity: 0.95;
-            box-shadow: 0 0 10px rgba(0,0,0,0.2);
-        ">
-            <h4 style="margin: 0 0 10px 0; color: #2c3e50;">
-                 Radiation Statistics
-            </h4>
-            <hr style="margin: 5px 0;">
-            <p><b>Average:</b> {stats['mean']:.3f} μSv/h</p>
-            <p><b>Maximum:</b> {stats['max']:.3f} μSv/h</p>
-            <p><b>Minimum:</b> {stats['min']:.3f} μSv/h</p>
-            <p><b>Std Deviation:</b> {stats['std']:.3f} μSv/h</p>
-            <hr style="margin: 5px 0;">
-            <p><b>Risk Distribution:</b></p>
-            <div style="margin-left: 10px;">
-                <p>• Safe: {risk_counts['SAFE']} points</p>
-                <p>• Low: {risk_counts['LOW']} points</p>
-                <p>• Moderate: {risk_counts['MODERATE']} points</p>
-                <p>• High: {risk_counts['HIGH']} points</p>
-                <p>• Severe: {risk_counts['SEVERE']} points</p>
-            </div>
-            <hr style="margin: 5px 0;">
-            <small>Natural background: 0.10-0.15 μSv/h</small>
-        </div>
+    def create_folium_reference_map(self) -> folium.Map:
         """
-
-        map_obj.get_root().html.add_child(folium.Element(stats_html))
-
-        # Add color scale legend
-        colormap = cm.LinearColormap(
-            colors=['green', 'yellow', 'orange', 'red', 'purple'],
-            vmin=df['Radiation_μSv_h'].min(),
-            vmax=df['Radiation_μSv_h'].max(),
-            caption='Radiation Level (μSv/h)'
+        Build a Folium map object with CARTO Dark Matter, OpenStreetMap,
+        CARTO Positron, and Esri Satellite layers plus survey boundary and nodes.
+        """
+        fmap = folium.Map(
+            location=[self.center_lat, self.center_lon],
+            zoom_start=18,
+            tiles="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+            attr="© OpenStreetMap contributors · © CARTO",
+            control_scale=True,
         )
-        colormap.add_to(map_obj)
+        folium.TileLayer("OpenStreetMap", name="OpenStreetMap").add_to(fmap)
+        folium.TileLayer("CartoDB positron", name="CARTO Light").add_to(fmap)
+        folium.TileLayer(
+            tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+            attr="Esri",
+            name="Satellite",
+        ).add_to(fmap)
 
-        return map_obj
+        # Survey boundary polygon
+        bounds_ring = [
+            [self.radiation_data.lat_min, self.radiation_data.lon_min],
+            [self.radiation_data.lat_max, self.radiation_data.lon_min],
+            [self.radiation_data.lat_max, self.radiation_data.lon_max],
+            [self.radiation_data.lat_min, self.radiation_data.lon_max],
+        ]
+        folium.Polygon(
+            locations=bounds_ring,
+            color="#94A3B8",
+            weight=1.5,
+            dash_array="6, 6",
+            fill=False,
+            popup="Survey Boundary",
+        ).add_to(fmap)
 
-    def generate_light_theme_map(self):
-        """Generate complete map with Google Maps-like light theme"""
-        print("  Creating interactive radiation map with light theme...")
+        # Flight path polyline
+        path_coords = [[pt["lat"], pt["lon"]] for pt in self.radiation_data.nodes]
+        if len(path_coords) > 1:
+            folium.PolyLine(
+                locations=path_coords,
+                color="#94A3B8",
+                weight=1.2,
+                opacity=0.65,
+                dash_array="4, 6",
+            ).add_to(fmap)
 
-        # Create base map with light theme
-        radiation_map = self.create_google_style_map()
+        # Measurement nodes
+        for pt in self.radiation_data.nodes:
+            folium.CircleMarker(
+                location=[pt["lat"], pt["lon"]],
+                radius=7,
+                color="#0F1217",
+                weight=2,
+                fill=True,
+                fill_color=pt["color"],
+                fill_opacity=1.0,
+                popup=f"Node #{pt['id']}: {pt['dose']:.4f} µSv/h ({pt['tierName']})",
+            ).add_to(fmap)
 
-        # Add all layers
-        radiation_map = self.add_heatmap_layer(radiation_map)
-        radiation_map = self.add_measurement_points(radiation_map)
-        radiation_map = self.add_risk_zones(radiation_map)
-        radiation_map = self.add_statistics_panel(radiation_map)
+        LayerControl(position="topright").add_to(fmap)
+        return fmap
 
-        # Add layer control
-        LayerControl(collapsed=False, position='topright').add_to(radiation_map)
+    def build_interactive_html(self, default_view: str = "split") -> str:
+        """
+        Render the complete ISOTOPER B15 Ground Control Radiation Dose Map HTML
+        matching the Developer Handoff specification (Images 1 & 2) with:
+          - Live Google Sheets GM Counter API sync + zero-reading filter
+          - User-editable Start/End Latitude & Longitude survey box + Map Click Picker
+          - 56 × 38 log-scale continuous & stepped-tier interpolation engine
+          - Side-by-side or single-canvas Interpolated Distribution & Measurement Nodes
+          - Field Statistics, Risk Distribution, and Annual Dose at Peak cards
+        """
+        initial_payload = {
+            "apiUrl": GM_MACRO_URL,
+            "defaultView": default_view,
+            "defaultBounds": {
+                "lat1": self.radiation_data.lat_min,
+                "lon1": self.radiation_data.lon_min,
+                "lat2": self.radiation_data.lat_max,
+                "lon2": self.radiation_data.lon_max,
+                "label": DEFAULT_SURVEY_BOUNDS["label"],
+            },
+            "prefetchedReadings": self.radiation_data.readings,
+            "rawCount": self.radiation_data.raw_count,
+            "zeroFilteredCount": self.radiation_data.zero_filtered_count,
+            "sampleFieldDoses": SAMPLE_FIELD_DOSES,
+            "config": {
+                "minLogDose": 0.1,
+                "maxLogDose": 30.0,
+                "annualHours": 2000,
+                "publicLimitMSv": 1.0,
+                "workerLimitMSv": 20.0,
+                "gridCols": GRID_COLS,
+                "gridRows": GRID_ROWS,
+                "tiers": [
+                    {
+                        "key": t["key"],
+                        "name": t["name"],
+                        "min": t["min"],
+                        "max": 999999 if math.isinf(t["max"]) else t["max"],
+                        "rangeLabel": t["rangeLabel"],
+                        "annualLabel": t["annualLabel"],
+                        "meaning": t["meaning"],
+                        "shortMeaning": t["shortMeaning"],
+                        "color": t["color"],
+                        "textColor": t["textColor"],
+                    }
+                    for t in DOSE_CONFIG["tiers"]
+                ],
+                "rampStops": DOSE_CONFIG["rampStops"],
+            },
+        }
 
-        # Add title banner
-        title_html = '''
-        <div style="
-            position: fixed;
-            top: 10px;
-            left: 50px;
-            z-index: 9999;
-            background: rgba(255,255,255,0.95);
-            padding: 10px 15px;
-            border-radius: 5px;
-            border: 2px solid #2c3e50;
-            font-family: Arial;
-            max-width: 500px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.2);
-        ">
-            <h3 style="margin: 0; color: #2c3e50;"> Radiation Mapping System</h3>
-            <p style="margin: 5px 0 0 0; font-size: 12px; color: #34495e;">
-                GM Tube Detection • Drone Survey • University Research Project<br>
-                <span style="color: #e74c3c;"> Safety Limits: Public 1000 μSv/year • Workers 20000 μSv/year</span>
-            </p>
-        </div>
-        '''
+        payload_json = json.dumps(initial_payload, ensure_ascii=False)
+        html_template = _HTML_TEMPLATE.replace("__INITIAL_PAYLOAD_JSON__", payload_json)
+        return html_template
 
-        radiation_map.get_root().html.add_child(folium.Element(title_html))
+    def save_map(self, filename: str = "radiation_map_light.html") -> str:
+        """Save both radiation_dispersion_map.html and radiation_map_light.html."""
+        out_path = Path(filename)
+        base_dir = out_path.parent if out_path.parent.exists() else Path(".")
 
-        return radiation_map
+        dispersion_file = base_dir / "radiation_dispersion_map.html"
+        nodes_file = base_dir / "radiation_map_light.html"
 
-    def generate_complete_map(self):
-        """Legacy method - use generate_light_theme_map instead"""
-        return self.generate_light_theme_map()
+        dispersion_html = self.build_interactive_html(default_view="split")
+        nodes_html = self.build_interactive_html(default_view="nodes")
 
-    def save_map(self, filename="radiation_map_light.html"):
-        """Save map to HTML file"""
-        radiation_map = self.generate_light_theme_map()
-        radiation_map.save(filename)
-        return filename
+        dispersion_file.write_text(dispersion_html, encoding="utf-8")
+        nodes_file.write_text(nodes_html, encoding="utf-8")
+
+        print(f"[OK] Saved Interpolated / Split Dose Map -> {dispersion_file.resolve()}")
+        print(f"[OK] Saved Measurement Nodes Map        -> {nodes_file.resolve()}")
+        return str(out_path.resolve())
+
 
 # ============================================================================
-# 4. RISK REPORT GENERATOR
+# 6. HTML / CSS / JS TEMPLATE (ISOTOPER B15 RADIATION DOSE MAP)
 # ============================================================================
 
-def generate_risk_report(radiation_data):
-    """Generate comprehensive risk assessment report"""
-    df, stats = radiation_data.get_dataframe()
+_HTML_TEMPLATE = r"""<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ISOTOPER B15 · Radiation Dose Map</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        :root {
+            --bg-page: #0B0E14;
+            --bg-card: #121721;
+            --bg-card-inner: #161C28;
+            --bg-input: #0E131B;
+            --border-subtle: rgba(255, 255, 255, 0.08);
+            --border-strong: rgba(255, 255, 255, 0.16);
+            --text-main: #F3F4F6;
+            --text-secondary: #9CA3AF;
+            --text-muted: #6B7280;
+            --accent: #38BDF8;
+            --tier-safe: #22C55E;
+            --tier-low: #A3E635;
+            --tier-moderate: #FACC15;
+            --tier-high: #F97316;
+            --tier-severe: #C81E1E;
+            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-display: 'Space Grotesk', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
 
-    # Analyze risk distribution
-    risk_counts = {'SAFE': 0, 'LOW': 0, 'MODERATE': 0, 'HIGH': 0, 'SEVERE': 0}
-    hotspots = []
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-    for idx, row in df.iterrows():
-        risk = assess_risk_corrected(row['Radiation_μSv_h'])
-        risk_counts[risk['level']] += 1
+        body {
+            background-color: var(--bg-page);
+            color: var(--text-main);
+            font-family: var(--font-sans);
+            padding: 20px 24px 28px 24px;
+            min-height: 100vh;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
 
-        if risk['level'] in ['MODERATE', 'HIGH', 'SEVERE']:
-            hotspots.append({
-                'point': idx + 1,
-                'radiation': row['Radiation_μSv_h'],
-                'risk': risk['level']
-            })
+        .b15-wrapper {
+            max-width: 1440px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
 
-    # Calculate overall risk index (0-100)
-    max_reading = stats['max']
-    mean_reading = stats['mean']
-    risk_index = min(100, (max_reading * 70) + (mean_reading * 30))
+        /* ---------------- HEADER BAR ---------------- */
+        .b15-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            flex-wrap: wrap;
+            gap: 16px;
+            padding-bottom: 4px;
+        }
 
-    # Determine overall risk level
-    if risk_index < 30:
-        overall_risk = "SAFE"
-        recommendations = [
-            "Continue routine monitoring",
-            "Maintain baseline records",
-            "No restrictions needed"
-        ]
-    elif risk_index < 50:
-        overall_risk = "LOW"
-        recommendations = [
-            "Monitor monthly",
-            "Investigate minor elevations",
-            "Inform local authorities"
-        ]
-    elif risk_index < 70:
-        overall_risk = "MODERATE"
-        recommendations = [
-            "Increase monitoring to weekly",
-            "Restrict prolonged access to elevated areas",
-            "Investigate potential sources"
-        ]
-    elif risk_index < 90:
-        overall_risk = "HIGH"
-        recommendations = [
-            "Restrict area access",
-            "Notify radiation safety officer",
-            "Begin source investigation",
-            "Implement protective measures"
-        ]
-    else:
-        overall_risk = "SEVERE"
-        recommendations = [
-            "IMMEDIATE AREA RESTRICTION",
-            "Contact nuclear regulatory body",
-            "Deploy emergency response",
-            "Evacuate non-essential personnel"
-        ]
+        .b15-title-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
 
-    # Generate report
-    report = f"""
-{'='*70}
-RADIATION RISK ASSESSMENT REPORT
-Environmental Monitoring System - Isotopper B15 Project
-{'='*70}
+        .b15-eyebrow {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+        }
 
-SURVEY SUMMARY:
----------------
-• Data Points Collected: {len(df)}
-• Maximum Radiation: {stats['max']:.3f} μSv/h
-• Average Radiation: {stats['mean']:.3f} μSv/h
-• Natural Background Range: 0.10 - 0.15 μSv/h
+        .b15-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.68rem;
+            font-weight: 600;
+            border: 1px solid var(--border-strong);
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text-main);
+            cursor: pointer;
+            transition: all 0.18s ease;
+        }
 
-RISK ASSESSMENT:
-----------------
-• Overall Risk Level: {overall_risk} (Index: {risk_index:.1f}/100)
-• Risk Distribution:
-   - Safe: {risk_counts['SAFE']} points
-   - Low: {risk_counts['LOW']} points
-   - Moderate: {risk_counts['MODERATE']} points
-   - High: {risk_counts['HIGH']} points
-   - Severe: {risk_counts['SEVERE']} points
+        .b15-badge:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
 
-SAFETY ANALYSIS:
-----------------
-• Public Annual Limit: 1000 μSv (1 mSv)
-• Worker Annual Limit: 20000 μSv (20 mSv)
-• Highest Reading Annual Dose (8hr/day, 250 days): {max_reading * 8 * 250:.0f} μSv
-• % of Public Limit: {(max_reading * 8 * 250 / 1000) * 100:.1f}%
-• % of Worker Limit: {(max_reading * 8 * 250 / 20000) * 100:.1f}%
+        .b15-badge-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #22C55E;
+            box-shadow: 0 0 6px #22C55E;
+        }
 
-HOTSPOTS IDENTIFIED:
---------------------
+        .b15-title {
+            font-family: var(--font-display);
+            font-size: 1.85rem;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            color: #FFFFFF;
+            line-height: 1.15;
+        }
+
+        /* ---------------- TOP CONTROLS ---------------- */
+        .b15-controls {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .seg-group {
+            display: inline-flex;
+            background: var(--bg-card);
+            border: 1px solid var(--border-strong);
+            border-radius: 8px;
+            overflow: hidden;
+            padding: 2px;
+        }
+
+        .seg-btn {
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-family: var(--font-sans);
+            font-size: 0.78rem;
+            font-weight: 600;
+            padding: 6px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .seg-btn.active {
+            background: #F3F4F6;
+            color: #0B0E14;
+        }
+
+        .chk-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-strong);
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 0.78rem;
+            font-weight: 500;
+            color: var(--text-main);
+            cursor: pointer;
+            user-select: none;
+            transition: border-color 0.15s ease;
+        }
+
+        .chk-pill:hover {
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .chk-pill input {
+            display: none;
+        }
+
+        .chk-box {
+            width: 15px;
+            height: 15px;
+            border-radius: 4px;
+            border: 1.5px solid var(--text-secondary);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: 700;
+            color: #0B0E14;
+            background: transparent;
+            transition: all 0.15s ease;
+        }
+
+        .chk-pill input:checked + .chk-box {
+            background: #F3F4F6;
+            border-color: #F3F4F6;
+        }
+
+        /* ---------------- USER SURVEY COORDINATE BAR ---------------- */
+        .coord-bar {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .coord-bar-left {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .coord-tag {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+
+        .coord-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--bg-input);
+            border: 1px solid var(--border-subtle);
+            padding: 4px 10px;
+            border-radius: 8px;
+        }
+
+        .coord-group span {
+            font-family: var(--font-mono);
+            font-size: 0.68rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+
+        .coord-input {
+            background: transparent;
+            border: none;
+            color: var(--text-main);
+            font-family: var(--font-mono);
+            font-size: 0.78rem;
+            font-weight: 600;
+            width: 96px;
+            outline: none;
+            padding: 2px 4px;
+            border-bottom: 1px solid transparent;
+        }
+
+        .coord-input:focus {
+            border-bottom-color: var(--accent);
+        }
+
+        .coord-actions {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .action-btn {
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            font-weight: 600;
+            padding: 7px 12px;
+            border-radius: 7px;
+            border: 1px solid var(--border-strong);
+            background: var(--bg-card-inner);
+            color: var(--text-main);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+        }
+
+        .action-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .action-btn.primary {
+            background: #22C55E;
+            border-color: #22C55E;
+            color: #052E16;
+            font-weight: 700;
+        }
+
+        .action-btn.primary:hover {
+            background: #4ADE80;
+            border-color: #4ADE80;
+            color: #052E16;
+        }
+
+        .action-btn.picking {
+            background: rgba(250, 204, 21, 0.16);
+            border-color: #FACC15;
+            color: #FACC15;
+        }
+
+        .feed-status {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* ---------------- DOSE RATE LOG SCALE CARD ---------------- */
+        .scale-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 16px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .scale-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .scale-title {
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+        }
+
+        .scale-note {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+        }
+
+        .ramp-wrap {
+            position: relative;
+            padding-bottom: 22px;
+        }
+
+        .ramp-bar {
+            height: 14px;
+            border-radius: 999px;
+            width: 100%;
+            background: linear-gradient(
+                90deg,
+                #16A34A 0%,
+                #84CC16 12.15%,
+                #FACC15 28.22%,
+                #F97316 59.63%,
+                #DC2626 80.74%,
+                #B91C1C 100%
+            );
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+        }
+
+        .ramp-bar.stepped {
+            background: linear-gradient(
+                90deg,
+                #22C55E 0%, #22C55E 12.15%,
+                #A3E635 12.15%, #A3E635 28.22%,
+                #FACC15 28.22%, #FACC15 59.63%,
+                #F97316 59.63%, #F97316 80.74%,
+                #C81E1E 80.74%, #C81E1E 100%
+            );
+        }
+
+        .ramp-ticks {
+            position: relative;
+            width: 100%;
+            height: 18px;
+            margin-top: 4px;
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+        }
+
+        .ramp-tick {
+            position: absolute;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            line-height: 1.1;
+        }
+
+        .ramp-tick:first-child {
+            transform: translateX(0%);
+        }
+
+        .ramp-tick:last-child {
+            transform: translateX(-100%);
+        }
+
+        .ramp-tick::before {
+            content: '';
+            width: 1px;
+            height: 5px;
+            background: var(--text-muted);
+            margin-bottom: 3px;
+        }
+
+        .tier-cards {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+        }
+
+        .tier-card {
+            background: var(--bg-card-inner);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            padding: 10px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .tier-card-head {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: #FFFFFF;
+        }
+
+        .tier-swatch {
+            width: 11px;
+            height: 11px;
+            border-radius: 3px;
+            flex-shrink: 0;
+        }
+
+        .tier-range {
+            font-family: var(--font-mono);
+            font-size: 0.74rem;
+            color: var(--text-main);
+            padding-left: 19px;
+        }
+
+        .tier-sub {
+            font-size: 0.69rem;
+            color: var(--text-muted);
+            padding-left: 19px;
+            line-height: 1.3;
+        }
+
+        /* ---------------- DUAL MAP PANELS ---------------- */
+        .maps-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .maps-grid.single-interp {
+            grid-template-columns: 1fr;
+        }
+
+        .maps-grid.single-interp #panel-nodes {
+            display: none;
+        }
+
+        .maps-grid.single-nodes {
+            grid-template-columns: 1fr;
+        }
+
+        .maps-grid.single-nodes #panel-interp {
+            display: none;
+        }
+
+        .map-panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 14px 16px 16px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .map-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .map-panel-title {
+            font-family: var(--font-mono);
+            font-size: 0.74rem;
+            font-weight: 600;
+            letter-spacing: 0.09em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+        }
+
+        .map-panel-meta {
+            font-family: var(--font-mono);
+            font-size: 0.71rem;
+            color: var(--text-muted);
+        }
+
+        .map-viewport {
+            position: relative;
+            width: 100%;
+            height: 460px;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            background: #090C10;
+        }
+
+        .maps-grid.single-interp .map-viewport,
+        .maps-grid.single-nodes .map-viewport {
+            height: 540px;
+        }
+
+        .leaflet-map {
+            width: 100%;
+            height: 100%;
+            background: #090C10 !important;
+        }
+
+        /* Dark Leaflet Controls matching Image 2 */
+        .leaflet-control-zoom {
+            border: 1px solid var(--border-strong) !important;
+            border-radius: 7px !important;
+            overflow: hidden;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5) !important;
+        }
+
+        .leaflet-control-zoom a {
+            background: rgba(18, 23, 33, 0.92) !important;
+            color: #E5E7EB !important;
+            border-bottom: 1px solid var(--border-subtle) !important;
+            width: 30px !important;
+            height: 30px !important;
+            line-height: 30px !important;
+            font-family: var(--font-mono) !important;
+            font-size: 15px !important;
+        }
+
+        .leaflet-control-zoom a:hover {
+            background: #1F2937 !important;
+            color: #FFFFFF !important;
+        }
+
+        .leaflet-control-scale-line {
+            background: rgba(11, 14, 20, 0.78) !important;
+            border: 1px solid rgba(255, 255, 255, 0.35) !important;
+            border-top: none !important;
+            color: #D1D5DB !important;
+            font-family: var(--font-mono) !important;
+            font-size: 10px !important;
+            padding: 2px 6px !important;
+        }
+
+        .leaflet-control-attribution {
+            display: none !important;
+        }
+
+        .map-attr-pill {
+            position: absolute;
+            right: 10px;
+            bottom: 10px;
+            z-index: 650;
+            background: rgba(11, 14, 20, 0.82);
+            border: 1px solid var(--border-subtle);
+            border-radius: 6px;
+            padding: 4px 9px;
+            font-family: var(--font-sans);
+            font-size: 0.68rem;
+            color: var(--text-secondary);
+            pointer-events: none;
+        }
+
+        .nodes-legend-pill {
+            position: absolute;
+            right: 10px;
+            bottom: 10px;
+            z-index: 650;
+            background: rgba(11, 14, 20, 0.88);
+            border: 1px solid var(--border-strong);
+            border-radius: 6px;
+            padding: 5px 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.7rem;
+            color: var(--text-main);
+        }
+
+        .nodes-legend-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .nodes-legend-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        /* Survey Boundary Label */
+        .survey-boundary-label {
+            color: #9CA3AF;
+            font-family: var(--font-sans);
+            font-size: 11px;
+            font-weight: 500;
+            white-space: nowrap;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+            pointer-events: none;
+        }
+
+        /* Readout Card (Peak & Hover Cursor) matching Image 1 & 2 */
+        .readout-card {
+            background: rgba(13, 17, 24, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 8px;
+            padding: 8px 12px;
+            min-width: 148px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65);
+            pointer-events: none;
+            font-family: var(--font-sans);
+        }
+
+        .readout-eyebrow {
+            font-family: var(--font-mono);
+            font-size: 0.63rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            margin-bottom: 2px;
+        }
+
+        .readout-val {
+            font-family: var(--font-mono);
+            font-size: 1.08rem;
+            font-weight: 700;
+            color: #FFFFFF;
+            line-height: 1.2;
+        }
+
+        .readout-val small {
+            font-size: 0.72rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .readout-sub {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.7rem;
+            color: #E5E7EB;
+            margin-top: 3px;
+            white-space: nowrap;
+        }
+
+        .readout-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        /* Node value pill on Measurement Nodes map */
+        .node-val-label {
+            background: rgba(11, 14, 20, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 4px;
+            padding: 1px 5px;
+            font-family: var(--font-mono);
+            font-size: 10px;
+            font-weight: 600;
+            color: #F3F4F6;
+            white-space: nowrap;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+            pointer-events: none;
+        }
+
+        /* ---------------- BOTTOM 3 STATISTICS CARDS ---------------- */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1.15fr 1fr;
+            gap: 16px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 16px 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .stat-card-title {
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+        }
+
+        .field-metrics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px 20px;
+        }
+
+        .field-metric-label {
+            font-size: 0.74rem;
+            color: var(--text-secondary);
+            margin-bottom: 2px;
+        }
+
+        .field-metric-val {
+            font-family: var(--font-mono);
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #FFFFFF;
+            line-height: 1.15;
+        }
+
+        .stat-card-foot {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+        }
+
+        /* Risk Distribution Card */
+        .risk-bar-stack {
+            height: 10px;
+            width: 100%;
+            border-radius: 999px;
+            overflow: hidden;
+            display: flex;
+            background: var(--bg-card-inner);
+        }
+
+        .risk-bar-seg {
+            height: 100%;
+            transition: width 0.3s ease;
+        }
+
+        .risk-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .risk-row {
+            display: grid;
+            grid-template-columns: 1fr auto 54px;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.78rem;
+        }
+
+        .risk-row-name {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-main);
+        }
+
+        .risk-row-count {
+            font-family: var(--font-mono);
+            color: var(--text-secondary);
+            text-align: right;
+        }
+
+        .risk-row-pct {
+            font-family: var(--font-mono);
+            color: var(--text-muted);
+            text-align: right;
+        }
+
+        /* Annual Dose at Peak Card */
+        .peak-annual-val {
+            font-family: var(--font-mono);
+            font-size: 1.9rem;
+            font-weight: 700;
+            color: #FFFFFF;
+            line-height: 1.1;
+        }
+
+        .peak-annual-val small {
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .peak-annual-tier {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .limit-bars {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 4px;
+        }
+
+        .limit-row-head {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.74rem;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .limit-row-head strong {
+            font-family: var(--font-mono);
+            color: var(--text-main);
+            font-weight: 600;
+        }
+
+        .limit-track {
+            width: 100%;
+            height: 6px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.08);
+            overflow: hidden;
+        }
+
+        .limit-fill {
+            height: 100%;
+            border-radius: 999px;
+            transition: width 0.3s ease;
+        }
+
+        /* Dark Leaflet Popup */
+        .leaflet-popup-content-wrapper {
+            background: #121721 !important;
+            color: #F3F4F6 !important;
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: 8px !important;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.65) !important;
+        }
+
+        .leaflet-popup-tip {
+            background: #121721 !important;
+        }
+
+        @media (max-width: 1080px) {
+            .tier-cards {
+                grid-template-columns: repeat(3, 1fr);
+            }
+            .maps-grid {
+                grid-template-columns: 1fr;
+            }
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 640px) {
+            body {
+                padding: 12px;
+            }
+            .tier-cards {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="b15-wrapper">
+        <!-- HEADER BAR -->
+        <header class="b15-header">
+            <div class="b15-title-group">
+                <div class="b15-eyebrow">
+                    <span>ISOTOPER B15 · GROUND CONTROL</span>
+                    <button class="b15-badge" id="btnSourceToggle" title="Click to toggle between Live Google Sheets GM Counter data and Reference Sample Field">
+                        <span class="b15-badge-dot" id="sourceDot"></span>
+                        <span id="sourceBadgeText">LIVE GM SHEET</span>
+                    </button>
+                </div>
+                <h1 class="b15-title">Radiation dose map</h1>
+            </div>
+
+            <div class="b15-controls">
+                <div class="seg-group" role="group" aria-label="Color scale mode">
+                    <button class="seg-btn active" id="btnModeCont" onclick="setScaleMode('continuous')">Continuous</button>
+                    <button class="seg-btn" id="btnModeStep" onclick="setScaleMode('stepped')">Stepped tiers</button>
+                </div>
+
+                <label class="chk-pill">
+                    <input type="checkbox" id="chkHeat" checked onchange="toggleLayerVisibility()" />
+                    <span class="chk-box">✓</span>
+                    <span>Heat field</span>
+                </label>
+
+                <label class="chk-pill">
+                    <input type="checkbox" id="chkPoints" checked onchange="toggleLayerVisibility()" />
+                    <span class="chk-box">✓</span>
+                    <span>Sample points</span>
+                </label>
+
+                <label class="chk-pill">
+                    <input type="checkbox" id="chkPath" checked onchange="toggleLayerVisibility()" />
+                    <span class="chk-box">✓</span>
+                    <span>Flight path</span>
+                </label>
+
+                <div class="seg-group" role="group" aria-label="Basemap tile style">
+                    <button class="seg-btn active" id="btnTileDark" onclick="setBasemapStyle('dark')">Dark</button>
+                    <button class="seg-btn" id="btnTileOsm" onclick="setBasemapStyle('osm')">OSM</button>
+                    <button class="seg-btn" id="btnTileSat" onclick="setBasemapStyle('sat')">Satellite</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- USER SURVEY BOUNDARY (LAT/LON) INPUT & SYNC BAR -->
+        <section class="coord-bar" aria-label="Survey Area Coordinate Selection">
+            <div class="coord-bar-left">
+                <div class="coord-tag">
+                    <span>⌖ SURVEY AREA (START → END)</span>
+                </div>
+                <div class="coord-group" title="Start Corner Latitude (South/West)">
+                    <span>Lat 1</span>
+                    <input type="number" step="0.0001" id="inLat1" class="coord-input" value="23.837700" />
+                </div>
+                <div class="coord-group" title="Start Corner Longitude (South/West)">
+                    <span>Lon 1</span>
+                    <input type="number" step="0.0001" id="inLon1" class="coord-input" value="90.357000" />
+                </div>
+                <div class="coord-group" title="End Corner Latitude (North/East)">
+                    <span>Lat 2</span>
+                    <input type="number" step="0.0001" id="inLat2" class="coord-input" value="23.838500" />
+                </div>
+                <div class="coord-group" title="End Corner Longitude (North/East)">
+                    <span>Lon 2</span>
+                    <input type="number" step="0.0001" id="inLon2" class="coord-input" value="90.357900" />
+                </div>
+            </div>
+
+            <div class="coord-actions">
+                <button class="action-btn primary" onclick="applyUserCoordinates()">
+                    <span>▶ Apply &amp; Interpolate</span>
+                </button>
+                <button class="action-btn" id="btnPickCorners" onclick="startCornerPicking()">
+                    <span>✥ Pick 2 Corners on Map</span>
+                </button>
+                <button class="action-btn" onclick="resetMistCoordinates()">
+                    <span>↺ MIST Default</span>
+                </button>
+                <button class="action-btn" id="btnSyncSheet" onclick="fetchLiveGmSheet(true)">
+                    <span>⟳ Sync GM Sheet</span>
+                </button>
+                <div class="feed-status" id="feedStatusText">
+                    Ready
+                </div>
+            </div>
+        </section>
+
+        <!-- DOSE RATE LOG SCALE LEGEND & 5 TIER CARDS -->
+        <section class="scale-card">
+            <div class="scale-header">
+                <div class="scale-title">DOSE RATE · µSV/H · LOG SCALE</div>
+                <div class="scale-note">
+                    Annual figures assume 8 h/day, 250 days (2,000 h/yr) · Public limit 1 mSv/yr · Worker limit 20 mSv/yr
+                </div>
+            </div>
+
+            <div class="ramp-wrap">
+                <div class="ramp-bar" id="rampBar"></div>
+                <div class="ramp-ticks">
+                    <div class="ramp-tick" style="left: 0%;">0.1</div>
+                    <div class="ramp-tick" style="left: 12.15%;">0.2</div>
+                    <div class="ramp-tick" style="left: 28.22%;">0.5</div>
+                    <div class="ramp-tick" style="left: 40.37%;">1</div>
+                    <div class="ramp-tick" style="left: 59.63%;">3</div>
+                    <div class="ramp-tick" style="left: 80.74%;">10</div>
+                    <div class="ramp-tick" style="left: 100%;">30+</div>
+                </div>
+            </div>
+
+            <div class="tier-cards" id="tierCardsContainer"></div>
+        </section>
+
+        <!-- DUAL GEOSPATIAL MAPS -->
+        <section class="maps-grid" id="mapsGridContainer">
+            <!-- LEFT: INTERPOLATED DISTRIBUTION -->
+            <div class="map-panel" id="panel-interp">
+                <div class="map-panel-header">
+                    <div class="map-panel-title">INTERPOLATED DISTRIBUTION</div>
+                    <div class="map-panel-meta" id="interpMetaLabel">56 × 38 grid · continuous log ramp</div>
+                </div>
+                <div class="map-viewport">
+                    <div id="mapInterp" class="leaflet-map"></div>
+                    <div class="map-attr-pill" id="interpBasemapAttr">Leaflet · CARTO Dark Matter basemap</div>
+                </div>
+            </div>
+
+            <!-- RIGHT: MEASUREMENT NODES -->
+            <div class="map-panel" id="panel-nodes">
+                <div class="map-panel-header">
+                    <div class="map-panel-title">MEASUREMENT NODES</div>
+                    <div class="map-panel-meta" id="nodesMetaLabel">-- GM-tube readings · tier colors</div>
+                </div>
+                <div class="map-viewport">
+                    <div id="mapNodes" class="leaflet-map"></div>
+                    <div class="nodes-legend-pill" id="nodesLegendPill"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- BOTTOM 3 STATISTICS CARDS -->
+        <section class="stats-grid">
+            <!-- CARD 1: FIELD STATISTICS -->
+            <div class="stat-card">
+                <div class="stat-card-title">FIELD STATISTICS</div>
+                <div class="field-metrics-grid">
+                    <div>
+                        <div class="field-metric-label">Average</div>
+                        <div class="field-metric-val" id="statAvg">--</div>
+                    </div>
+                    <div>
+                        <div class="field-metric-label">Maximum</div>
+                        <div class="field-metric-val" id="statMax">--</div>
+                    </div>
+                    <div>
+                        <div class="field-metric-label">Minimum</div>
+                        <div class="field-metric-val" id="statMin">--</div>
+                    </div>
+                    <div>
+                        <div class="field-metric-label">Std deviation</div>
+                        <div class="field-metric-val" id="statStd">--</div>
+                    </div>
+                </div>
+                <div class="stat-card-foot" id="statCellsFoot">
+                    µSv/h across 2,128 grid cells inside the survey boundary
+                </div>
+            </div>
+
+            <!-- CARD 2: RISK DISTRIBUTION -->
+            <div class="stat-card">
+                <div class="stat-card-title">RISK DISTRIBUTION</div>
+                <div class="risk-bar-stack" id="riskBarStack"></div>
+                <div class="risk-list" id="riskListContainer"></div>
+            </div>
+
+            <!-- CARD 3: ANNUAL DOSE AT PEAK -->
+            <div class="stat-card">
+                <div>
+                    <div class="stat-card-title">ANNUAL DOSE AT PEAK</div>
+                    <div class="peak-annual-val" style="margin-top: 8px;">
+                        <span id="peakAnnualNum">--</span> <small>mSv/yr</small>
+                    </div>
+                    <div class="peak-annual-tier">
+                        <span class="readout-dot" id="peakAnnualDot"></span>
+                        <span id="peakAnnualTierTxt">-- · If occupied 8 h/day, 250 days/yr</span>
+                    </div>
+                </div>
+
+                <div class="limit-bars">
+                    <div>
+                        <div class="limit-row-head">
+                            <span>Public limit · 1 mSv/yr</span>
+                            <strong id="publicLimitRatio">--</strong>
+                        </div>
+                        <div class="limit-track">
+                            <div class="limit-fill" id="publicLimitBar" style="width: 0%;"></div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="limit-row-head">
+                            <span>Worker limit · 20 mSv/yr</span>
+                            <strong id="workerLimitRatio">--</strong>
+                        </div>
+                        <div class="limit-track">
+                            <div class="limit-fill" id="workerLimitBar" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        // =========================================================================
+        // 1. INITIAL PAYLOAD & UNIFIED CONFIGURATION
+        // =========================================================================
+        const INITIAL = __INITIAL_PAYLOAD_JSON__;
+        const CFG = INITIAL.config;
+        const STORAGE_KEY = 'isotoper_b15_survey_state_v2';
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const requestedLayout = urlParams.get('layout') || INITIAL.defaultView || 'split';
+
+        let state = {
+            dataSource: 'live', // 'live' (Google Sheets GM API) or 'sample' (48-node spec field)
+            scaleMode: 'continuous', // 'continuous' or 'stepped'
+            basemap: 'dark', // 'dark' | 'osm' | 'sat'
+            showHeat: true,
+            showPoints: true,
+            showPath: true,
+            bounds: { ...INITIAL.defaultBounds },
+            liveReadings: Array.isArray(INITIAL.prefetchedReadings) ? INITIAL.prefetchedReadings : [],
+            rawCount: INITIAL.rawCount || 0,
+            zeroFiltered: INITIAL.zeroFilteredCount || 0,
+            nodes: [],
+            grid: [], // 38 rows × 56 cols
+            peakCell: null,
+            pickingStep: 0,
+            tempCorner1: null,
+        };
+
+        // Restore saved user coordinates if present
+        try {
+            const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+            if (saved && saved.bounds) {
+                state.bounds = saved.bounds;
+            }
+            if (saved && saved.dataSource) {
+                state.dataSource = saved.dataSource;
+            }
+        } catch (e) {}
+
+        // =========================================================================
+        // 2. COLOR & TIER FUNCTIONS (LOG10 AXIS 0.1 TO 30 µSV/H)
+        // =========================================================================
+        function getTier(dose) {
+            for (const t of CFG.tiers) {
+                if (dose < t.max) return t;
+            }
+            return CFG.tiers[CFG.tiers.length - 1];
+        }
+
+        function hexToRgb(hex) {
+            const h = hex.replace('#', '');
+            return [
+                parseInt(h.substring(0, 2), 16),
+                parseInt(h.substring(2, 4), 16),
+                parseInt(h.substring(4, 6), 16),
+            ];
+        }
+
+        function doseToRgb(dose, mode) {
+            if (mode === 'stepped') {
+                return hexToRgb(getTier(dose).color);
+            }
+            const clamped = Math.max(CFG.minLogDose, Math.min(CFG.maxLogDose, dose));
+            const pos = Math.log10(clamped / 0.1) / Math.log10(300.0);
+            const stops = CFG.rampStops;
+            for (let i = 0; i < stops.length - 1; i++) {
+                const s0 = stops[i];
+                const s1 = stops[i + 1];
+                if (pos <= s1.pos || i === stops.length - 2) {
+                    const span = s1.pos - s0.pos;
+                    const t = span <= 0 ? 0 : Math.max(0, Math.min(1, (pos - s0.pos) / span));
+                    const c0 = hexToRgb(s0.color);
+                    const c1 = hexToRgb(s1.color);
+                    return [
+                        Math.round(c0[0] + (c1[0] - c0[0]) * t),
+                        Math.round(c0[1] + (c1[1] - c0[1]) * t),
+                        Math.round(c0[2] + (c1[2] - c0[2]) * t),
+                    ];
+                }
+            }
+            return hexToRgb(stops[stops.length - 1].color);
+        }
+
+        function formatDose(v) {
+            if (v >= 10) return v.toFixed(1);
+            if (v >= 1) return v.toFixed(2);
+            return v.toFixed(3);
+        }
+
+        // =========================================================================
+        // 3. BUILD STATIC UI ELEMENTS FROM CONFIG
+        // =========================================================================
+        function initStaticUI() {
+            // Apply single/split layout if requested
+            const gridEl = document.getElementById('mapsGridContainer');
+            if (requestedLayout === 'interpolated') {
+                gridEl.classList.add('single-interp');
+            } else if (requestedLayout === 'nodes') {
+                gridEl.classList.add('single-nodes');
+            }
+
+            // Populate coordinate inputs
+            document.getElementById('inLat1').value = Number(state.bounds.lat1).toFixed(6);
+            document.getElementById('inLon1').value = Number(state.bounds.lon1).toFixed(6);
+            document.getElementById('inLat2').value = Number(state.bounds.lat2).toFixed(6);
+            document.getElementById('inLon2').value = Number(state.bounds.lon2).toFixed(6);
+
+            // Populate 5 Tier Cards
+            const tierContainer = document.getElementById('tierCardsContainer');
+            tierContainer.innerHTML = CFG.tiers.map(t => `
+                <div class="tier-card">
+                    <div class="tier-card-head">
+                        <span class="tier-swatch" style="background:${t.color};"></span>
+                        <span>${t.name}</span>
+                    </div>
+                    <div class="tier-range">${t.rangeLabel}</div>
+                    <div class="tier-sub">${t.annualLabel} · ${t.shortMeaning}</div>
+                </div>
+            `).join('');
+
+            // Populate Nodes Legend Pill
+            const pill = document.getElementById('nodesLegendPill');
+            pill.innerHTML = CFG.tiers.map(t => `
+                <span class="nodes-legend-item">
+                    <span class="nodes-legend-dot" style="background:${t.color};"></span>
+                    <span>${t.name}</span>
+                </span>
+            `).join('');
+
+            // Source toggle button handler
+            document.getElementById('btnSourceToggle').addEventListener('click', () => {
+                state.dataSource = state.dataSource === 'live' ? 'sample' : 'live';
+                saveState();
+                recomputeAndRender(false);
+            });
+        }
+
+        // =========================================================================
+        // 4. LEAFLET DUAL MAPS INITIALIZATION
+        // =========================================================================
+        const TILE_URLS = {
+            dark: {
+                url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+                attr: 'Leaflet · CARTO Dark Matter basemap',
+            },
+            osm: {
+                url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                attr: 'Leaflet · OpenStreetMap Standard basemap',
+            },
+            sat: {
+                url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                attr: 'Leaflet · Esri World Imagery Satellite',
+            },
+        };
+
+        let mapInterp, mapNodes;
+        let tileLayerInterp, tileLayerNodes;
+        let heatOverlayInterp = null;
+        let boundaryLayerInterp, boundaryLayerNodes;
+        let pathLayerInterp, pathLayerNodes;
+        let pointsLayerInterp, pointsLayerNodes;
+        let peakLayerInterp;
+        let cursorMarkerInterp = null;
+        let isSyncingMaps = false;
+
+        function initMaps() {
+            const centerLat = (state.bounds.lat1 + state.bounds.lat2) / 2;
+            const centerLon = (state.bounds.lon1 + state.bounds.lon2) / 2;
+
+            mapInterp = L.map('mapInterp', {
+                center: [centerLat, centerLon],
+                zoom: 18,
+                zoomControl: true,
+                attributionControl: false,
+                preferCanvas: true,
+            });
+
+            mapNodes = L.map('mapNodes', {
+                center: [centerLat, centerLon],
+                zoom: 18,
+                zoomControl: true,
+                attributionControl: false,
+                preferCanvas: true,
+            });
+
+            L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(mapInterp);
+            L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(mapNodes);
+
+            tileLayerInterp = L.tileLayer(TILE_URLS.dark.url, { maxZoom: 20 }).addTo(mapInterp);
+            tileLayerNodes = L.tileLayer(TILE_URLS.dark.url, { maxZoom: 20 }).addTo(mapNodes);
+
+            boundaryLayerInterp = L.layerGroup().addTo(mapInterp);
+            boundaryLayerNodes = L.layerGroup().addTo(mapNodes);
+            pathLayerInterp = L.layerGroup().addTo(mapInterp);
+            pathLayerNodes = L.layerGroup().addTo(mapNodes);
+            pointsLayerInterp = L.layerGroup().addTo(mapInterp);
+            pointsLayerNodes = L.layerGroup().addTo(mapNodes);
+            peakLayerInterp = L.layerGroup().addTo(mapInterp);
+
+            // Synchronize pan & zoom between Interpolated and Measurement Nodes maps
+            function syncMap(source, target) {
+                source.on('moveend zoomend', () => {
+                    if (isSyncingMaps) return;
+                    isSyncingMaps = true;
+                    target.setView(source.getCenter(), source.getZoom(), { animate: false });
+                    isSyncingMaps = false;
+                });
+            }
+            syncMap(mapInterp, mapNodes);
+            syncMap(mapNodes, mapInterp);
+
+            // Interactive hover readout on Interpolated map inside survey boundary
+            mapInterp.on('mousemove', onInterpMouseMove);
+            mapInterp.on('mouseout', () => {
+                if (cursorMarkerInterp) {
+                    mapInterp.removeLayer(cursorMarkerInterp);
+                    cursorMarkerInterp = null;
+                }
+            });
+
+            // Map click handler for 2-corner area picking
+            mapInterp.on('click', onMapClickForCorner);
+            mapNodes.on('click', onMapClickForCorner);
+
+            // Auto-invalidate size when hidden tab/iframe becomes visible
+            if (typeof ResizeObserver !== 'undefined') {
+                const ro = new ResizeObserver(() => {
+                    mapInterp.invalidateSize();
+                    mapNodes.invalidateSize();
+                    const latMin = Math.min(state.bounds.lat1, state.bounds.lat2);
+                    const latMax = Math.max(state.bounds.lat1, state.bounds.lat2);
+                    const lonMin = Math.min(state.bounds.lon1, state.bounds.lon2);
+                    const lonMax = Math.max(state.bounds.lon1, state.bounds.lon2);
+                    const padded = L.latLngBounds([latMin, lonMin], [latMax, lonMax]).pad(0.18);
+                    isSyncingMaps = true;
+                    mapInterp.fitBounds(padded, { animate: false });
+                    mapNodes.fitBounds(padded, { animate: false });
+                    setTimeout(() => { isSyncingMaps = false; }, 100);
+                });
+                ro.observe(document.body);
+            }
+        }
+
+        // =========================================================================
+        // 5. SPATIAL INTERPOLATION ENGINE (56 × 38 GRID INSIDE SURVEY BOUNDARY)
+        // =========================================================================
+        function getActiveReadings() {
+            if (state.dataSource === 'sample') {
+                return INITIAL.sampleFieldDoses.map((d, idx) => ({
+                    id: idx + 1,
+                    dose: d,
+                    cpm: Math.round((d / 0.00812) * 10) / 10,
+                    cps: Math.round(((d / 0.00812) / 60) * 100) / 100,
+                    status: getTier(d).name,
+                    timestamp: 'Reference Survey Field',
+                }));
+            }
+            return state.liveReadings;
+        }
+
+        function computeNodesAndGrid() {
+            const readings = getActiveReadings();
+            const n = readings.length;
+            if (n === 0) return;
+
+            const latMin = Math.min(state.bounds.lat1, state.bounds.lat2);
+            const latMax = Math.max(state.bounds.lat1, state.bounds.lat2);
+            const lonMin = Math.min(state.bounds.lon1, state.bounds.lon2);
+            const lonMax = Math.max(state.bounds.lon1, state.bounds.lon2);
+
+            const latSpan = Math.max(1e-6, latMax - latMin);
+            const lonSpan = Math.max(1e-6, lonMax - lonMin);
+
+            // Determine lawnmower grid dimensions (6 rows × 8 cols for 48 readings, or adaptive)
+            const rows = state.dataSource === 'sample' ? 6 : Math.max(2, Math.min(10, Math.round(Math.sqrt(n * 0.75))));
+            const cols = Math.max(2, Math.ceil(n / rows));
+
+            const padLat = latSpan * 0.07;
+            const padLon = lonSpan * 0.06;
+            const innerLatMin = latMin + padLat;
+            const innerLatMax = latMax - padLat;
+            const innerLonMin = lonMin + padLon;
+            const innerLonMax = lonMax - padLon;
+
+            const nodes = [];
+            for (let idx = 0; idx < n; idx++) {
+                const r = readings[idx];
+                const rowIdx = Math.floor(idx / cols);
+                const colInRow = idx % cols;
+                const ptsInRow = Math.min(cols, n - rowIdx * cols);
+
+                const latT = rows <= 1 ? 0.5 : rowIdx / (rows - 1);
+                const lat = innerLatMax - latT * (innerLatMax - innerLatMin);
+
+                let lonT = ptsInRow <= 1 ? 0.5 : colInRow / (ptsInRow - 1);
+                if (rowIdx % 2 === 1) lonT = 1.0 - lonT;
+                const lon = innerLonMin + lonT * (innerLonMax - innerLonMin);
+
+                const tier = getTier(r.dose);
+                nodes.push({
+                    id: idx + 1,
+                    rowIdx,
+                    colInRow,
+                    lat,
+                    lon,
+                    dose: r.dose,
+                    cpm: r.cpm,
+                    cps: r.cps,
+                    timestamp: r.timestamp,
+                    tier,
+                    annualMSv: r.dose * (CFG.annualHours / 1000.0),
+                });
+            }
+            state.nodes = nodes;
+
+            // Interpolate 56 × 38 grid inside [latMin..latMax, lonMin..lonMax]
+            const G_ROWS = CFG.gridRows;
+            const G_COLS = CFG.gridCols;
+            const grid = [];
+            let maxDose = -1;
+            let peakCell = null;
+
+            const logDoses = nodes.map(pt => Math.log10(Math.max(0.01, pt.dose)));
+            const normLats = nodes.map(pt => (pt.lat - latMin) / latSpan);
+            const normLons = nodes.map(pt => (pt.lon - lonMin) / lonSpan);
+            const sigma2 = 2.0 * 0.135 * 0.135;
+
+            for (let r = 0; r < G_ROWS; r++) {
+                const rowArr = [];
+                const cellLat = latMax - ((r + 0.5) / G_ROWS) * latSpan;
+                const ny = (cellLat - latMin) / latSpan;
+
+                for (let c = 0; c < G_COLS; c++) {
+                    const cellLon = lonMin + ((c + 0.5) / G_COLS) * lonSpan;
+                    const nx = (cellLon - lonMin) / lonSpan;
+
+                    let wSum = 0;
+                    let vSum = 0;
+                    for (let k = 0; k < n; k++) {
+                        const dx = nx - normLons[k];
+                        const dy = ny - normLats[k];
+                        const d2 = dx * dx + dy * dy;
+                        const w = Math.exp(-d2 / sigma2) + 1.0 / Math.pow(d2 + 0.0012, 1.4);
+                        wSum += w;
+                        vSum += w * logDoses[k];
+                    }
+                    const dose = Math.pow(10.0, vSum / wSum);
+                    rowArr.push(dose);
+
+                    if (dose > maxDose) {
+                        maxDose = dose;
+                        peakCell = {
+                            row: r + 1,
+                            col: c + 1,
+                            lat: cellLat,
+                            lon: cellLon,
+                            dose,
+                            tier: getTier(dose),
+                            annualMSv: dose * (CFG.annualHours / 1000.0),
+                        };
+                    }
+                }
+                grid.push(rowArr);
+            }
+
+            state.grid = grid;
+            state.peakCell = peakCell;
+        }
+
+        // =========================================================================
+        // 6. RENDER HEAT OVERLAY, SURVEY BOUNDARY, FLIGHT PATH, NODES & STATS
+        // =========================================================================
+        function renderHeatCanvasDataUrl() {
+            const G_ROWS = CFG.gridRows;
+            const G_COLS = CFG.gridCols;
+            // High-res upsampled canvas for smooth rendering inside survey boundary
+            const scale = 6;
+            const width = G_COLS * scale;
+            const height = G_ROWS * scale;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            const imgData = ctx.createImageData(width, height);
+            const data = imgData.data;
+
+            for (let py = 0; py < height; py++) {
+                const gy = (py / (height - 1)) * (G_ROWS - 1);
+                const r0 = Math.floor(gy);
+                const r1 = Math.min(G_ROWS - 1, r0 + 1);
+                const ty = gy - r0;
+
+                for (let px = 0; px < width; px++) {
+                    const gx = (px / (width - 1)) * (G_COLS - 1);
+                    const c0 = Math.floor(gx);
+                    const c1 = Math.min(G_COLS - 1, c0 + 1);
+                    const tx = gx - c0;
+
+                    // Bilinear interpolation across the 56 × 38 grid cells
+                    const v00 = state.grid[r0][c0];
+                    const v10 = state.grid[r0][c1];
+                    const v01 = state.grid[r1][c0];
+                    const v11 = state.grid[r1][c1];
+                    const dose =
+                        (1 - tx) * (1 - ty) * v00 +
+                        tx * (1 - ty) * v10 +
+                        (1 - tx) * ty * v01 +
+                        tx * ty * v11;
+
+                    const rgb = doseToRgb(dose, state.scaleMode);
+                    const idx = (py * width + px) * 4;
+                    data[idx] = rgb[0];
+                    data[idx + 1] = rgb[1];
+                    data[idx + 2] = rgb[2];
+                    data[idx + 3] = 208; // ~81.5% opacity (within 75-85% spec rule)
+                }
+            }
+            ctx.putImageData(imgData, 0, 0);
+            return canvas.toDataURL('image/png');
+        }
+
+        function renderMaps(fitCamera = false) {
+            const latMin = Math.min(state.bounds.lat1, state.bounds.lat2);
+            const latMax = Math.max(state.bounds.lat1, state.bounds.lat2);
+            const lonMin = Math.min(state.bounds.lon1, state.bounds.lon2);
+            const lonMax = Math.max(state.bounds.lon1, state.bounds.lon2);
+            const surveyBounds = L.latLngBounds([latMin, lonMin], [latMax, lonMax]);
+
+            // 1. Heat Overlay clipped strictly to survey boundary
+            if (heatOverlayInterp) {
+                mapInterp.removeLayer(heatOverlayInterp);
+                heatOverlayInterp = null;
+            }
+            if (state.showHeat && state.grid.length > 0) {
+                const dataUrl = renderHeatCanvasDataUrl();
+                heatOverlayInterp = L.imageOverlay(dataUrl, surveyBounds, {
+                    opacity: 1.0,
+                    interactive: false,
+                }).addTo(mapInterp);
+            }
+
+            // 2. Dashed Survey Boundary Box + Label on both maps
+            boundaryLayerInterp.clearLayers();
+            boundaryLayerNodes.clearLayers();
+
+            [boundaryLayerInterp, boundaryLayerNodes].forEach(layer => {
+                L.rectangle(surveyBounds, {
+                    color: '#9CA3AF',
+                    weight: 1.3,
+                    opacity: 0.75,
+                    dashArray: '5, 5',
+                    fill: false,
+                    interactive: false,
+                }).addTo(layer);
+
+                L.marker([latMax, lonMin], {
+                    icon: L.divIcon({
+                        className: 'survey-boundary-label',
+                        html: 'Survey boundary',
+                        iconSize: [110, 18],
+                        iconAnchor: [0, 20],
+                    }),
+                    interactive: false,
+                }).addTo(layer);
+            });
+
+            // 3. Dashed Flight Path on both maps
+            pathLayerInterp.clearLayers();
+            pathLayerNodes.clearLayers();
+            if (state.showPath && state.nodes.length > 1) {
+                const latlngs = state.nodes.map(pt => [pt.lat, pt.lon]);
+                L.polyline(latlngs, {
+                    color: '#E5E7EB',
+                    weight: 1.1,
+                    opacity: 0.45,
+                    dashArray: '3, 5',
+                    interactive: false,
+                }).addTo(pathLayerInterp);
+
+                L.polyline(latlngs, {
+                    color: '#9CA3AF',
+                    weight: 1.2,
+                    opacity: 0.55,
+                    dashArray: '4, 5',
+                    interactive: false,
+                }).addTo(pathLayerNodes);
+            }
+
+            // 4. Sample Points on Interpolated map + Tier-colored Nodes on Measurement Nodes map
+            pointsLayerInterp.clearLayers();
+            pointsLayerNodes.clearLayers();
+
+            if (state.showPoints) {
+                state.nodes.forEach(pt => {
+                    // Small white sample dot on Interpolated Distribution map
+                    L.circleMarker([pt.lat, pt.lon], {
+                        radius: 2.8,
+                        color: '#0F1217',
+                        weight: 1.2,
+                        fillColor: '#FFFFFF',
+                        fillOpacity: 0.95,
+                        interactive: false,
+                    }).addTo(pointsLayerInterp);
+                });
+            }
+
+            // Measurement Nodes (14px circle = 7px radius, 2px #0F1217 stroke, 1px white halo at 55%)
+            state.nodes.forEach((pt, idx) => {
+                // Outer 1px white halo at 55%
+                L.circleMarker([pt.lat, pt.lon], {
+                    radius: 8,
+                    color: 'rgba(255, 255, 255, 0.55)',
+                    weight: 1,
+                    fill: false,
+                    interactive: false,
+                }).addTo(pointsLayerNodes);
+
+                // Main 14px node marker
+                const marker = L.circleMarker([pt.lat, pt.lon], {
+                    radius: 7,
+                    color: '#0F1217',
+                    weight: 2,
+                    fillColor: pt.tier.color,
+                    fillOpacity: 1.0,
+                }).addTo(pointsLayerNodes);
+
+                const popupHtml = `
+                    <div style="font-family:var(--font-sans);min-width:210px;padding:2px;">
+                        <div style="font-family:var(--font-mono);font-size:0.68rem;color:#9CA3AF;text-transform:uppercase;">
+                            NODE #${pt.id} · ${pt.tier.name.toUpperCase()}
+                        </div>
+                        <div style="font-family:var(--font-mono);font-size:1.15rem;font-weight:700;color:#FFF;margin:3px 0;">
+                            ${formatDose(pt.dose)} <span style="font-size:0.75rem;color:#9CA3AF;">µSv/h</span>
+                        </div>
+                        <div style="font-size:0.74rem;color:${pt.tier.color};font-weight:600;margin-bottom:6px;">
+                            ● ${pt.tier.name} · ${pt.annualMSv.toFixed(2)} mSv/yr
+                        </div>
+                        <div style="font-family:var(--font-mono);font-size:0.7rem;color:#D1D5DB;line-height:1.5;border-top:1px solid rgba(255,255,255,0.1);padding-top:5px;">
+                            <div>CPM: ${pt.cpm} | CPS: ${pt.cps}</div>
+                            <div>Lat: ${pt.lat.toFixed(6)}°N</div>
+                            <div>Lon: ${pt.lon.toFixed(6)}°E</div>
+                        </div>
+                    </div>
+                `;
+                marker.bindPopup(popupHtml);
+
+                // Show numeric dose pill beside elevated readings (or representative nodes when all Safe/Low)
+                const showValueLabel =
+                    pt.dose >= 0.5 ||
+                    (state.peakCell && state.peakCell.dose < 0.6 && idx % Math.max(1, Math.floor(state.nodes.length / 18)) === 0);
+
+                if (showValueLabel) {
+                    L.marker([pt.lat, pt.lon], {
+                        icon: L.divIcon({
+                            className: '',
+                            html: `<span class="node-val-label">${formatDose(pt.dose)}</span>`,
+                            iconSize: [44, 18],
+                            iconAnchor: [-10, 9],
+                        }),
+                        interactive: false,
+                    }).addTo(pointsLayerNodes);
+                }
+            });
+
+            // 5. Peak Reading Ring (26px) + Readout Card on Interpolated Map
+            peakLayerInterp.clearLayers();
+            if (state.peakCell) {
+                const pk = state.peakCell;
+                // 26px ring (radius 13)
+                L.circleMarker([pk.lat, pk.lon], {
+                    radius: 13,
+                    color: '#FFFFFF',
+                    weight: 2.2,
+                    fillColor: pk.tier.color,
+                    fillOpacity: 0.9,
+                    interactive: false,
+                }).addTo(peakLayerInterp);
+
+                const cardHtml = `
+                    <div class="readout-card">
+                        <div class="readout-eyebrow">PEAK READING</div>
+                        <div class="readout-val">${formatDose(pk.dose)} <small>µSv/h</small></div>
+                        <div class="readout-sub">
+                            <span class="readout-dot" style="background:${pk.tier.color};"></span>
+                            <span>${pk.tier.name} · ${pk.annualMSv.toFixed(1)} mSv/yr</span>
+                        </div>
+                    </div>
+                `;
+                L.marker([pk.lat, pk.lon], {
+                    icon: L.divIcon({
+                        className: '',
+                        html: cardHtml,
+                        iconSize: [165, 68],
+                        iconAnchor: [178, 34],
+                    }),
+                    interactive: false,
+                }).addTo(peakLayerInterp);
+            }
+
+            // Update panel headers
+            document.getElementById('interpMetaLabel').textContent =
+                `${CFG.gridCols} × ${CFG.gridRows} grid · ${state.scaleMode === 'continuous' ? 'continuous log ramp' : 'stepped tiers'}`;
+            document.getElementById('nodesMetaLabel').textContent =
+                `${state.nodes.length} GM-tube readings · tier colors`;
+
+            if (fitCamera) {
+                const padded = surveyBounds.pad(0.18);
+                isSyncingMaps = true;
+                mapInterp.fitBounds(padded, { animate: true });
+                mapNodes.fitBounds(padded, { animate: true });
+                setTimeout(() => { isSyncingMaps = false; }, 350);
+            }
+        }
+
+        // =========================================================================
+        // 7. HOVER CURSOR READOUT CARD ON INTERPOLATED GRID
+        // =========================================================================
+        function onInterpMouseMove(e) {
+            if (!state.grid || state.grid.length === 0) return;
+            const latMin = Math.min(state.bounds.lat1, state.bounds.lat2);
+            const latMax = Math.max(state.bounds.lat1, state.bounds.lat2);
+            const lonMin = Math.min(state.bounds.lon1, state.bounds.lon2);
+            const lonMax = Math.max(state.bounds.lon1, state.bounds.lon2);
+
+            const { lat, lng } = e.latlng;
+            if (lat < latMin || lat > latMax || lng < lonMin || lng > lonMax) {
+                if (cursorMarkerInterp) {
+                    mapInterp.removeLayer(cursorMarkerInterp);
+                    cursorMarkerInterp = null;
+                }
+                return;
+            }
+
+            const r = Math.min(
+                CFG.gridRows - 1,
+                Math.max(0, Math.floor(((latMax - lat) / (latMax - latMin)) * CFG.gridRows))
+            );
+            const c = Math.min(
+                CFG.gridCols - 1,
+                Math.max(0, Math.floor(((lng - lonMin) / (lonMax - lonMin)) * CFG.gridCols))
+            );
+
+            const dose = state.grid[r][c];
+            const tier = getTier(dose);
+            const annualMSv = dose * (CFG.annualHours / 1000.0);
+
+            const html = `
+                <div style="position:relative;">
+                    <div style="width:14px;height:14px;border-radius:50%;border:2px solid #FFF;background:${tier.color};transform:translate(-7px,-7px);box-shadow:0 0 8px rgba(0,0,0,0.8);"></div>
+                    <div class="readout-card" style="position:absolute;left:14px;top:-28px;">
+                        <div class="readout-eyebrow">CELL ${c + 1} · ${r + 1}</div>
+                        <div class="readout-val">${formatDose(dose)} <small>µSv/h</small></div>
+                        <div class="readout-sub">
+                            <span class="readout-dot" style="background:${tier.color};"></span>
+                            <span>${tier.name} · ${annualMSv.toFixed(2)} mSv/yr</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            if (!cursorMarkerInterp) {
+                cursorMarkerInterp = L.marker([lat, lng], {
+                    icon: L.divIcon({ className: '', html, iconSize: [1, 1], iconAnchor: [0, 0] }),
+                    interactive: false,
+                    zIndexOffset: 1000,
+                }).addTo(mapInterp);
+            } else {
+                cursorMarkerInterp.setLatLng([lat, lng]);
+                cursorMarkerInterp.setIcon(
+                    L.divIcon({ className: '', html, iconSize: [1, 1], iconAnchor: [0, 0] })
+                );
+            }
+        }
+
+        // =========================================================================
+        // 8. UPDATE BOTTOM 3 STATISTICS CARDS
+        // =========================================================================
+        function renderStatsCards() {
+            const flat = state.grid.flat();
+            const totalCells = flat.length;
+            if (totalCells === 0) return;
+
+            let sum = 0;
+            let minV = Infinity;
+            let maxV = -Infinity;
+            const counts = { safe: 0, low: 0, moderate: 0, high: 0, severe: 0 };
+
+            for (const v of flat) {
+                sum += v;
+                if (v < minV) minV = v;
+                if (v > maxV) maxV = v;
+                const t = getTier(v);
+                counts[t.key] = (counts[t.key] || 0) + 1;
+            }
+
+            const mean = sum / totalCells;
+            let sqDiff = 0;
+            for (const v of flat) {
+                sqDiff += (v - mean) * (v - mean);
+            }
+            const std = Math.sqrt(sqDiff / totalCells);
+
+            // Card 1: Field Statistics
+            document.getElementById('statAvg').textContent = formatDose(mean);
+            document.getElementById('statMax').textContent = formatDose(maxV);
+            document.getElementById('statMin').textContent = formatDose(minV);
+            document.getElementById('statStd').textContent = formatDose(std);
+            document.getElementById('statCellsFoot').textContent =
+                `µSv/h across ${totalCells.toLocaleString()} grid cells inside the survey boundary`;
+
+            // Card 2: Risk Distribution
+            const stackEl = document.getElementById('riskBarStack');
+            const listEl = document.getElementById('riskListContainer');
+
+            stackEl.innerHTML = CFG.tiers.map(t => {
+                const pct = (counts[t.key] / totalCells) * 100;
+                return `<div class="risk-bar-seg" style="width:${pct.toFixed(2)}%;background:${t.color};"></div>`;
+            }).join('');
+
+            listEl.innerHTML = CFG.tiers.map(t => {
+                const cnt = counts[t.key];
+                const pct = (cnt / totalCells) * 100;
+                return `
+                    <div class="risk-row">
+                        <div class="risk-row-name">
+                            <span class="tier-swatch" style="background:${t.color};"></span>
+                            <span>${t.name}</span>
+                        </div>
+                        <div class="risk-row-count">${cnt}</div>
+                        <div class="risk-row-pct">${pct.toFixed(1)}%</div>
+                    </div>
+                `;
+            }).join('');
+
+            // Card 3: Annual Dose at Peak
+            const peakAnnualMSv = maxV * (CFG.annualHours / 1000.0);
+            const peakTier = getTier(maxV);
+
+            document.getElementById('peakAnnualNum').textContent =
+                peakAnnualMSv >= 10 ? peakAnnualMSv.toFixed(1) : peakAnnualMSv.toFixed(2);
+            document.getElementById('peakAnnualDot').style.background = peakTier.color;
+            document.getElementById('peakAnnualTierTxt').textContent =
+                `${peakTier.name} · If occupied 8 h/day, 250 days/yr`;
+
+            // Public limit (1 mSv/yr)
+            const pubRatio = peakAnnualMSv / CFG.publicLimitMSv;
+            const pubBar = document.getElementById('publicLimitBar');
+            pubBar.style.width = `${Math.min(100, pubRatio * 100).toFixed(1)}%`;
+            pubBar.style.background = pubRatio >= 1 ? '#C81E1E' : peakTier.color;
+            document.getElementById('publicLimitRatio').textContent =
+                pubRatio >= 1
+                    ? `Exceeds · ${pubRatio >= 10 ? pubRatio.toFixed(0) : pubRatio.toFixed(1)}×`
+                    : `${(pubRatio * 100).toFixed(0)}% of limit`;
+
+            // Worker limit (20 mSv/yr)
+            const wrkRatio = peakAnnualMSv / CFG.workerLimitMSv;
+            const wrkBar = document.getElementById('workerLimitBar');
+            wrkBar.style.width = `${Math.min(100, wrkRatio * 100).toFixed(1)}%`;
+            wrkBar.style.background = wrkRatio >= 1 ? '#C81E1E' : peakTier.color;
+            document.getElementById('workerLimitRatio').textContent =
+                wrkRatio >= 1
+                    ? `Exceeds · ${wrkRatio.toFixed(1)}×`
+                    : `${(wrkRatio * 100).toFixed(1)}% of limit`;
+
+            // Update Top Source Badge
+            const badgeTxt = document.getElementById('sourceBadgeText');
+            const badgeDot = document.getElementById('sourceDot');
+            if (state.dataSource === 'live') {
+                badgeTxt.textContent = `LIVE GM SHEET (${state.liveReadings.length} PTS)`;
+                badgeDot.style.background = '#22C55E';
+                badgeDot.style.boxShadow = '0 0 6px #22C55E';
+            } else {
+                badgeTxt.textContent = 'SAMPLE FIELD (48 PTS)';
+                badgeDot.style.background = '#FACC15';
+                badgeDot.style.boxShadow = '0 0 6px #FACC15';
+            }
+        }
+
+        // =========================================================================
+        // 9. USER CONTROLS: LAT/LON INPUTS, MAP PICKER, LIVE GOOGLE SHEETS FETCH
+        // =========================================================================
+        function recomputeAndRender(fitCamera = false) {
+            computeNodesAndGrid();
+            renderMaps(fitCamera);
+            renderStatsCards();
+        }
+
+        function saveState() {
+            try {
+                localStorage.setItem(
+                    STORAGE_KEY,
+                    JSON.stringify({
+                        bounds: state.bounds,
+                        dataSource: state.dataSource,
+                        updatedAt: Date.now(),
+                    })
+                );
+            } catch (e) {}
+        }
+
+        function applyUserCoordinates() {
+            const lat1 = parseFloat(document.getElementById('inLat1').value);
+            const lon1 = parseFloat(document.getElementById('inLon1').value);
+            const lat2 = parseFloat(document.getElementById('inLat2').value);
+            const lon2 = parseFloat(document.getElementById('inLon2').value);
+
+            if (
+                Number.isNaN(lat1) || Number.isNaN(lon1) ||
+                Number.isNaN(lat2) || Number.isNaN(lon2) ||
+                Math.abs(lat1 - lat2) < 0.00002 ||
+                Math.abs(lon1 - lon2) < 0.00002
+            ) {
+                document.getElementById('feedStatusText').textContent =
+                    '⚠ Enter two distinct valid Lat/Lon corners';
+                return;
+            }
+
+            state.bounds = {
+                lat1: Math.min(lat1, lat2),
+                lon1: Math.min(lon1, lon2),
+                lat2: Math.max(lat1, lat2),
+                lon2: Math.max(lon1, lon2),
+            };
+            saveState();
+            recomputeAndRender(true);
+            document.getElementById('feedStatusText').textContent =
+                `✓ Interpolated [${state.bounds.lat1.toFixed(4)}, ${state.bounds.lon1.toFixed(4)}] → [${state.bounds.lat2.toFixed(4)}, ${state.bounds.lon2.toFixed(4)}]`;
+        }
+
+        function resetMistCoordinates() {
+            state.bounds = { ...INITIAL.defaultBounds };
+            document.getElementById('inLat1').value = state.bounds.lat1.toFixed(6);
+            document.getElementById('inLon1').value = state.bounds.lon1.toFixed(6);
+            document.getElementById('inLat2').value = state.bounds.lat2.toFixed(6);
+            document.getElementById('inLon2').value = state.bounds.lon2.toFixed(6);
+            saveState();
+            recomputeAndRender(true);
+            document.getElementById('feedStatusText').textContent =
+                '✓ Reset to MIST Campus default coordinates';
+        }
+
+        function startCornerPicking() {
+            const btn = document.getElementById('btnPickCorners');
+            if (state.pickingStep > 0) {
+                state.pickingStep = 0;
+                btn.classList.remove('picking');
+                btn.innerHTML = '<span>✥ Pick 2 Corners on Map</span>';
+                document.getElementById('feedStatusText').textContent = 'Picking cancelled';
+                return;
+            }
+            state.pickingStep = 1;
+            btn.classList.add('picking');
+            btn.innerHTML = '<span>Click Corner 1 on Map...</span>';
+            document.getElementById('feedStatusText').textContent =
+                'Click first corner (Start Lat/Lon) on either map';
+        }
+
+        function onMapClickForCorner(e) {
+            if (state.pickingStep === 0) return;
+            const btn = document.getElementById('btnPickCorners');
+
+            if (state.pickingStep === 1) {
+                state.tempCorner1 = e.latlng;
+                document.getElementById('inLat1').value = e.latlng.lat.toFixed(6);
+                document.getElementById('inLon1').value = e.latlng.lng.toFixed(6);
+                state.pickingStep = 2;
+                btn.innerHTML = '<span>Click Corner 2 on Map...</span>';
+                document.getElementById('feedStatusText').textContent =
+                    'Now click opposite corner (End Lat/Lon) on map';
+            } else if (state.pickingStep === 2) {
+                document.getElementById('inLat2').value = e.latlng.lat.toFixed(6);
+                document.getElementById('inLon2').value = e.latlng.lng.toFixed(6);
+                state.pickingStep = 0;
+                btn.classList.remove('picking');
+                btn.innerHTML = '<span>✥ Pick 2 Corners on Map</span>';
+                applyUserCoordinates();
+            }
+        }
+
+        function setScaleMode(mode) {
+            state.scaleMode = mode;
+            document.getElementById('btnModeCont').classList.toggle('active', mode === 'continuous');
+            document.getElementById('btnModeStep').classList.toggle('active', mode === 'stepped');
+            document.getElementById('rampBar').classList.toggle('stepped', mode === 'stepped');
+            renderMaps(false);
+        }
+
+        function toggleLayerVisibility() {
+            state.showHeat = document.getElementById('chkHeat').checked;
+            state.showPoints = document.getElementById('chkPoints').checked;
+            state.showPath = document.getElementById('chkPath').checked;
+            renderMaps(false);
+        }
+
+        function setBasemapStyle(styleKey) {
+            state.basemap = styleKey;
+            document.getElementById('btnTileDark').classList.toggle('active', styleKey === 'dark');
+            document.getElementById('btnTileOsm').classList.toggle('active', styleKey === 'osm');
+            document.getElementById('btnTileSat').classList.toggle('active', styleKey === 'sat');
+
+            const spec = TILE_URLS[styleKey] || TILE_URLS.dark;
+            tileLayerInterp.setUrl(spec.url);
+            tileLayerNodes.setUrl(spec.url);
+            document.getElementById('interpBasemapAttr').textContent = spec.attr;
+        }
+
+        async function fetchLiveGmSheet(manualClick = false) {
+            const statusEl = document.getElementById('feedStatusText');
+            statusEl.textContent = 'Syncing GM Sheet...';
+            try {
+                const resp = await fetch(INITIAL.apiUrl);
+                const data = await resp.json();
+                const rawList = Array.isArray(data.history)
+                    ? data.history
+                    : (data.latest ? [data.latest] : []);
+
+                let zeroDropped = 0;
+                const valid = [];
+                rawList.forEach(item => {
+                    const dose = parseFloat(item.dose);
+                    const cpm = parseFloat(item.cpm);
+                    const cps = parseFloat(item.cps || 0);
+                    if (Number.isNaN(dose) || dose <= 0 || Number.isNaN(cpm) || cpm <= 0 || Number.isNaN(cps) || cps <= 0) {
+                        zeroDropped++;
+                        return;
+                    }
+                    valid.push({
+                        id: valid.length + 1,
+                        dose,
+                        cpm,
+                        cps,
+                        status: item.status || getTier(dose).name,
+                        timestamp: item.timestamp || new Date().toISOString(),
+                    });
+                });
+
+                if (valid.length > 0) {
+                    state.liveReadings = valid;
+                    state.rawCount = rawList.length;
+                    state.zeroFiltered = zeroDropped;
+                    if (manualClick) state.dataSource = 'live';
+                    recomputeAndRender(false);
+                    statusEl.textContent =
+                        `Live GM synced: ${valid.length} valid pts (${zeroDropped} zero filtered)`;
+                } else {
+                    statusEl.textContent = `Sheet returned 0 valid readings (${zeroDropped} zeros filtered)`;
+                }
+            } catch (err) {
+                statusEl.textContent = `Using cached GM readings (${state.liveReadings.length} pts)`;
+            }
+        }
+
+        // Sync across tabs/iframes when user updates coordinates
+        window.addEventListener('storage', (ev) => {
+            if (ev.key === STORAGE_KEY && ev.newValue) {
+                try {
+                    const parsed = JSON.parse(ev.newValue);
+                    if (parsed && parsed.bounds) {
+                        state.bounds = parsed.bounds;
+                        state.dataSource = parsed.dataSource || state.dataSource;
+                        document.getElementById('inLat1').value = Number(state.bounds.lat1).toFixed(6);
+                        document.getElementById('inLon1').value = Number(state.bounds.lon1).toFixed(6);
+                        document.getElementById('inLat2').value = Number(state.bounds.lat2).toFixed(6);
+                        document.getElementById('inLon2').value = Number(state.bounds.lon2).toFixed(6);
+                        recomputeAndRender(true);
+                    }
+                } catch (e) {}
+            }
+        });
+
+        // Initialize application
+        window.addEventListener('DOMContentLoaded', () => {
+            initStaticUI();
+            initMaps();
+            recomputeAndRender(true);
+            fetchLiveGmSheet(false);
+        });
+    </script>
+</body>
+</html>
 """
 
-    if hotspots:
-        for hotspot in hotspots:
-            exposure = calculate_exposure_safety(hotspot['radiation'])
-            report += f"""• Point {hotspot['point']}: {hotspot['radiation']:.3f} μSv/h ({hotspot['risk']} Risk)
-   - Public Safety: {exposure['public_safety']}
-   - Worker Safety: {exposure['worker_safety']}
-"""
-    else:
-        report += "• No significant hotspots detected (all readings within safe limits)\n"
 
-    report += f"""
-RECOMMENDED ACTIONS:
--------------------
-"""
-    for i, rec in enumerate(recommendations, 1):
-        report += f"{i}. {rec}\n"
+# ============================================================================
+# 7. CLI ENTRY POINT
+# ============================================================================
 
-    report += f"""
-CONCLUSION:
------------
-Based on IAEA/ICRP international standards and {len(df)} measurement points,
-the surveyed area presents {overall_risk.lower()} risk level.
-{("All readings are within acceptable limits for both public and occupational exposure."
-   if overall_risk in ['SAFE', 'LOW'] else
-   "Some areas require attention but do not pose immediate danger with proper controls.")}
+def main():
+    parser = argparse.ArgumentParser(
+        description="Generate ISOTOPER B15 Radiation Dose Maps from Google Sheets GM Counter API"
+    )
+    parser.add_argument("--lat1", type=float, default=DEFAULT_SURVEY_BOUNDS["lat1"], help="Start Latitude")
+    parser.add_argument("--lon1", type=float, default=DEFAULT_SURVEY_BOUNDS["lon1"], help="Start Longitude")
+    parser.add_argument("--lat2", type=float, default=DEFAULT_SURVEY_BOUNDS["lat2"], help="End Latitude")
+    parser.add_argument("--lon2", type=float, default=DEFAULT_SURVEY_BOUNDS["lon2"], help="End Longitude")
+    parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Prompt interactively for Start/End Latitude & Longitude in terminal",
+    )
+    args = parser.parse_args()
 
-{'='*70}
-Report Generated:  Radiation Monitoring System
-Reference: IAEA GSG-8, ICRP Publication 103
-{'='*70}
-"""
+    lat1, lon1, lat2, lon2 = args.lat1, args.lon1, args.lat2, args.lon2
 
-    return report
+    if args.interactive:
+        print("=== ISOTOPER B15 Survey Boundary Input ===")
+        try:
+            u_lat1 = input(f"Start Latitude  [{lat1}]: ").strip()
+            u_lon1 = input(f"Start Longitude [{lon1}]: ").strip()
+            u_lat2 = input(f"End Latitude    [{lat2}]: ").strip()
+            u_lon2 = input(f"End Longitude   [{lon2}]: ").strip()
+            if u_lat1:
+                lat1 = float(u_lat1)
+            if u_lon1:
+                lon1 = float(u_lon1)
+            if u_lat2:
+                lat2 = float(u_lat2)
+            if u_lon2:
+                lon2 = float(u_lon2)
+        except ValueError:
+            print("[WARN] Invalid number entered; using default MIST coordinates.")
 
-# Create and display the light theme map
-map_generator = RadiationMapGenerator()
-light_theme_map = map_generator.generate_light_theme_map()
-light_theme_map
-# Generate and save the light theme map
-print("Generating measurement points map...")
-map_generator = RadiationMapGenerator()
+    generator = RadiationMapGenerator(lat1=lat1, lon1=lon1, lat2=lat2, lon2=lon2)
+    out_dir = Path(__file__).resolve().parent
+    generator.save_map(str(out_dir / "radiation_map_light.html"))
 
-# Save the map
-map_filename = "radiation_map_light.html"
-map_generator.save_map(map_filename)
 
-print(f"✅ Map saved as: {map_filename}")
-
-# Download to your computer
-from google.colab import files
-files.download(map_filename)
-
-print("📥 Check your Downloads folder!")
+if __name__ == "__main__":
+    main()

@@ -671,16 +671,16 @@
         .single-map-iframe {
             width: 100%;
             border: 1px solid var(--border-color);
-            border-radius: 6px;
-            background: var(--bg-primary);
+            border-radius: 10px;
+            background: #0B0E14;
         }
 
         .map-iframe {
-            height: 650px;
+            height: 1080px;
         }
 
         .single-map-iframe {
-            height: 700px;
+            height: 1140px;
         }
 
         .map-card {
@@ -1338,40 +1338,29 @@
 
                     <div id="tab-both" class="tab-content active">
                         <div class="map-info-box">
-                            <h3>Dual Canvas Mode</h3>
-                            <p><strong>Alpha:</strong> Continuous radiation field derivation (N > 400)</p>
-                            <p><strong>Beta:</strong> Absolute geospatial measurement nodes</p>
+                            <h3>Dual Canvas Mode · ISOTOPER B15 Ground Control</h3>
+                            <p><strong>Live Sync:</strong> Pulls GM-tube readings from Google Sheets API (zero-filtered) and interpolates across your selected Start → End Latitude/Longitude survey boundary.</p>
                         </div>
 
-                        <div class="map-grid">
-                            <div class="map-card">
-                                <h3>Interpolated Distribution</h3>
-                                <iframe class="map-iframe" src="radiation_dispersion_map.html"
-                                    title="Interpolated Radiation Map" loading="lazy"></iframe>
-                            </div>
-                            <div class="map-card">
-                                <h3>Measurement Nodes</h3>
-                                <iframe class="map-iframe" src="radiation_map_light.html" title="Measurement Points Map"
-                                    loading="lazy"></iframe>
-                            </div>
-                        </div>
+                        <iframe class="map-iframe" src="radiation_dispersion_map.html?layout=split"
+                            title="ISOTOPER B15 Dual Radiation Dose Map" loading="lazy"></iframe>
                     </div>
 
                     <div id="tab-interpolated" class="tab-content">
                         <div class="map-info-box">
-                            <h3>Interpolated Distribution Matrix</h3>
-                            <p>Algorithmic expansion of discrete points to predict macro-area exposure.</p>
+                            <h3>Interpolated Distribution Matrix (56 × 38 Grid)</h3>
+                            <p>Log-scale continuous &amp; stepped-tier spatial interpolation inside the user-defined survey boundary.</p>
                         </div>
-                        <iframe class="single-map-iframe" src="radiation_dispersion_map.html" title="Interpolated Map"
+                        <iframe class="single-map-iframe" src="radiation_dispersion_map.html?layout=interpolated" title="Interpolated Map"
                             loading="lazy"></iframe>
                     </div>
 
                     <div id="tab-measurement" class="tab-content">
                         <div class="map-info-box">
                             <h3>Absolute Node Cartography</h3>
-                            <p>Direct plot of UAV intercepted radiation metrics with exact coordinate locks.</p>
+                            <p>Discrete UAV GM-tube readings along the survey flight path colored by IAEA/ICRP dose tiers.</p>
                         </div>
-                        <iframe class="single-map-iframe" src="radiation_map_light.html" title="Measurement Map"
+                        <iframe class="single-map-iframe" src="radiation_map_light.html?layout=nodes" title="Measurement Map"
                             loading="lazy"></iframe>
                     </div>
 
