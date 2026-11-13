@@ -2,20 +2,17 @@
 """
 ISOTOPER B15 — Geospatial Radiation Dose Mapping & Interpolation Engine
 ========================================================================
-Fetches live GM-counter telemetry from Google Sheets Apps Script macro,
-filters out zero/invalid readings, maps readings across a user-defined
+Fetches all GM-counter telemetry rows directly from the Google Sheet
+(1,136+ rows), filters out zero/invalid readings (54 zero rows filtered ->
+1,082 valid readings), maps all readings across a user-defined
 Latitude/Longitude survey bounding box along a UAV lawnmower flight path,
 interpolates a 56 × 38 (2,128-cell) dose distribution grid, and generates:
   1. radiation_dispersion_map.html (Dual / Interpolated Distribution View)
   2. radiation_map_light.html      (Discrete Measurement Nodes View)
-
-Both generated files include Folium/Leaflet free basemaps (CARTO Dark Matter,
-OpenStreetMap, CARTO Positron, Esri Satellite) and a live client-side
-interpolation & coordinate-entry engine so users can change Start/End
-Latitude & Longitude interactively in the browser at any time.
 """
 
 import argparse
+import io
 import json
 import math
 import warnings
@@ -27,7 +24,7 @@ import folium
 import numpy as np
 import pandas as pd
 import requests
-from folium import FeatureGroup, LayerControl
+from folium import LayerControl
 
 warnings.filterwarnings("ignore")
 
@@ -35,6 +32,10 @@ warnings.filterwarnings("ignore")
 # 1. UNIFIED CONFIGURATION (ISOTOPER B15 DEVELOPER HANDOFF SPEC)
 # ============================================================================
 
+GOOGLE_SHEET_ID = "1Gaiwuh3fOml1ib8fwBSZfUDDzHrzGYV9crpKF-P2foU"
+GOOGLE_SHEET_CSV_URL = (
+    f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv"
+)
 GM_MACRO_URL = (
     "https://script.google.com/macros/s/"
     "AKfycbzCBRfLEIenGJcOjMiCfhb3aIdF_kop9LOhxdMUeVzn__Sl10te8O-uQcWIacMrw4WpWw/exec"
@@ -55,7 +56,6 @@ ANNUAL_HOURS = 2000.0  # 8 h/day × 250 days/yr
 PUBLIC_LIMIT_MSV = 1.0
 WORKER_LIMIT_MSV = 20.0
 
-# Single source of truth for tiers, cut-offs, colors, and log10 ramp stops
 DOSE_CONFIG = {
     "minLogDose": 0.1,
     "maxLogDose": 30.0,
@@ -169,7 +169,7 @@ def dose_to_continuous_hex(dose_uSv_h: float) -> str:
       position = log10(v / 0.1) / log10(300)
     """
     clamped = max(0.1, min(30.0, float(dose_uSv_h)))
-    pos = math.log10(clamped / 0.1) / math.log10(300.0)
+    pos = math.log10(clamped / 0.1) / log10_300
     stops = DOSE_CONFIG["rampStops"]
 
     for i in range(len(stops) - 1):
@@ -187,14 +187,18 @@ def dose_to_continuous_hex(dose_uSv_h: float) -> str:
     return stops[-1]["color"]
 
 
+log10_300 = math.log10(300.0)
+
+
 # ============================================================================
-# 3. LIVE GM COUNTER DATA FETCHING & ZERO-FILTERING
+# 3. FULL GOOGLE SHEET DATA FETCHING & ZERO-FILTERING (ALL 1,136+ ROWS)
 # ============================================================================
 
 class RadiationData:
     """
-    Fetches GM-tube detector readings from the Google Sheets Apps Script macro,
-    filters out zero/invalid readings, assigns coordinates across a user-defined
+    Fetches all GM-tube detector rows from the Google Sheet CSV endpoint
+    (with fallback to the Apps Script macro), filters out zero/invalid readings
+    (dose <= 0 or cpm <= 0), assigns coordinates across a user-defined
     bounding box along a serpentine UAV flight path, and performs 2D spatial
     interpolation onto a 56 × 38 grid.
     """
@@ -205,8 +209,10 @@ class RadiationData:
         lon1: float = DEFAULT_SURVEY_BOUNDS["lon1"],
         lat2: float = DEFAULT_SURVEY_BOUNDS["lat2"],
         lon2: float = DEFAULT_SURVEY_BOUNDS["lon2"],
+        sheet_csv_url: str = GOOGLE_SHEET_CSV_URL,
         api_url: str = GM_MACRO_URL,
     ):
+        self.sheet_csv_url = sheet_csv_url
         self.api_url = api_url
         self.lat_min = min(float(lat1), float(lat2))
         self.lat_max = max(float(lat1), float(lat2))
@@ -218,105 +224,111 @@ class RadiationData:
         self.readings = []
         self.nodes = []
         self.grid_matrix = None
-        self.fetch_And_process()
+        self.fetch_and_process()
 
-    def fetch_And_process(self):
-        """Fetch live GM data from Google Sheets macro and filter out <= 0 readings."""
-        raw_items = []
-        try:
-            print(f"[INFO] Fetching GM counter data from Google Sheets macro...")
-            resp = requests.get(self.api_url, timeout=15)
-            resp.raise_for_status()
-            payload = resp.json()
-
-            if isinstance(payload, dict):
-                history = payload.get("history", [])
-                if isinstance(history, list) and len(history) > 0:
-                    raw_items = history
-                elif "latest" in payload and isinstance(payload["latest"], dict):
-                    raw_items = [payload["latest"]]
-            elif isinstance(payload, list):
-                raw_items = payload
-        except Exception as exc:
-            print(f"[WARN] Could not reach live GM macro ({exc}). Using fallback readings.")
-
-        self.raw_count = len(raw_items)
+    def fetch_and_process(self):
+        """Fetch all rows from the Google Sheet CSV export and filter out <= 0 readings."""
         valid_readings = []
         zero_count = 0
+        raw_total = 0
 
-        for idx, item in enumerate(raw_items):
-            try:
-                dose = float(item.get("dose", 0) or 0)
-                cpm = float(item.get("cpm", 0) or 0)
-                cps = float(item.get("cps", 0) or 0)
-            except (TypeError, ValueError):
-                zero_count += 1
-                continue
+        try:
+            print(f"[INFO] Fetching full GM counter dataset from Google Sheet ({GOOGLE_SHEET_ID})...")
+            resp = requests.get(self.sheet_csv_url, timeout=20)
+            resp.raise_for_status()
+            df_raw = pd.read_csv(io.StringIO(resp.text))
+            df_core = df_raw.iloc[:, :5].copy()
+            df_core.columns = ["cps", "cpm", "dose", "status", "timestamp"]
 
-            # Filter out zero or negative radiation readings (including cps <= 0) as requested
-            if math.isnan(dose) or dose <= 0.0 or cpm <= 0.0 or cps <= 0.0:
-                zero_count += 1
-                continue
+            raw_total = len(df_core)
+            for _, row in df_core.iterrows():
+                try:
+                    dose = float(row["dose"])
+                    cpm = float(row["cpm"])
+                    cps = float(row["cps"]) if not pd.isna(row["cps"]) else 0.0
+                except (TypeError, ValueError):
+                    zero_count += 1
+                    continue
 
-            valid_readings.append(
-                {
-                    "id": len(valid_readings) + 1,
-                    "dose": round(dose, 4),
-                    "cpm": round(cpm, 1),
-                    "cps": round(cps, 3),
-                    "status": str(item.get("status", "")).strip() or get_tier_for_dose(dose)["name"],
-                    "timestamp": str(item.get("timestamp", datetime.now(timezone.utc).isoformat())),
-                }
-            )
+                if math.isnan(dose) or math.isnan(cpm) or dose <= 0.0 or cpm <= 0.0:
+                    zero_count += 1
+                    continue
 
-        self.zero_filtered_count = zero_count
+                ts_val = "" if pd.isna(row["timestamp"]) else str(row["timestamp"]).strip()
+                st_val = "" if pd.isna(row["status"]) else str(row["status"]).strip()
 
-        # Fallback if all sheet rows were empty/zero or offline
-        if not valid_readings:
-            fallback_doses = [
-                0.3004, 0.2923, 0.2761, 0.2680, 0.2598, 0.2030, 0.2111, 0.1949,
-                0.2030, 0.1868, 0.1786, 0.2111, 0.2355, 0.2517, 0.2842, 0.3167,
-                0.3492, 0.3816, 0.4222, 0.4060, 0.4385, 0.3979, 0.3654, 0.3329,
-                0.3086, 0.2923, 0.3167, 0.3248, 0.3329, 0.3410, 0.3816, 0.4222,
-                0.4060, 0.4222, 0.3979, 0.4060,
-            ]
-            for i, d in enumerate(fallback_doses):
                 valid_readings.append(
                     {
-                        "id": i + 1,
-                        "dose": d,
-                        "cpm": round(d / 0.00812, 1),
-                        "cps": round((d / 0.00812) / 60.0, 2),
-                        "status": get_tier_for_dose(d)["name"],
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "id": len(valid_readings) + 1,
+                        "dose": round(dose, 4),
+                        "cpm": round(cpm, 1),
+                        "cps": round(cps, 2),
+                        "status": st_val or get_tier_for_dose(dose)["name"],
+                        "timestamp": ts_val,
                     }
                 )
+        except Exception as exc:
+            print(f"[WARN] Full Google Sheet CSV fetch failed ({exc}). Trying macro endpoint...")
+            try:
+                resp = requests.get(self.api_url, timeout=15)
+                resp.raise_for_status()
+                payload = resp.json()
+                raw_items = payload.get("history", []) if isinstance(payload, dict) else []
+                raw_total = len(raw_items)
+                for item in raw_items:
+                    try:
+                        dose = float(item.get("dose", 0) or 0)
+                        cpm = float(item.get("cpm", 0) or 0)
+                        cps = float(item.get("cps", 0) or 0)
+                    except (TypeError, ValueError):
+                        zero_count += 1
+                        continue
+                    if math.isnan(dose) or dose <= 0.0 or cpm <= 0.0:
+                        zero_count += 1
+                        continue
+                    valid_readings.append(
+                        {
+                            "id": len(valid_readings) + 1,
+                            "dose": round(dose, 4),
+                            "cpm": round(cpm, 1),
+                            "cps": round(cps, 2),
+                            "status": str(item.get("status", "")).strip() or get_tier_for_dose(dose)["name"],
+                            "timestamp": str(item.get("timestamp", "")),
+                        }
+                    )
+            except Exception as exc2:
+                print(f"[WARN] Macro fallback also failed ({exc2}).")
 
+        self.raw_count = raw_total
+        self.zero_filtered_count = zero_count
         self.readings = valid_readings
+
         print(
-            f"[INFO] GM Data Loaded: {self.raw_count} raw rows | "
-            f"{self.zero_filtered_count} zero/invalid filtered | "
-            f"{len(self.readings)} valid readings retained."
+            f"[INFO] Full Sheet Loaded: {self.raw_count} total rows | "
+            f"{self.zero_filtered_count} zero/invalid rows filtered | "
+            f"{len(self.readings)} valid readings plotted."
         )
         self.assign_coordinates_and_interpolate()
 
     def assign_coordinates_and_interpolate(self):
         """
-        Distribute the valid GM readings along a serpentine (lawnmower) UAV survey
+        Distribute all valid GM readings along a serpentine (lawnmower) UAV survey
         path inside [lat_min..lat_max, lon_min..lon_max] and compute the 56 × 38
         interpolated grid.
         """
         n = len(self.readings)
-        # Determine serpentine grid rows & columns proportional to aspect ratio
-        rows = max(2, min(10, int(round(math.sqrt(n * 0.75)))))
+        if n == 0:
+            return
+
+        # Proportional serpentine grid for N points (e.g. ~26 rows × 42 cols for 1,082 pts)
+        rows = max(2, int(round(math.sqrt(n * 0.62))))
         cols = max(2, int(math.ceil(n / rows)))
 
         lat_span = max(1e-6, self.lat_max - self.lat_min)
         lon_span = max(1e-6, self.lon_max - self.lon_min)
 
-        # Inset nodes slightly (6%) from the dashed survey boundary border
-        pad_lat = lat_span * 0.06
-        pad_lon = lon_span * 0.06
+        pad_lat = lat_span * 0.05
+        pad_lon = lon_span * 0.05
         inner_lat_min = self.lat_min + pad_lat
         inner_lat_max = self.lat_max - pad_lat
         inner_lon_min = self.lon_min + pad_lon
@@ -326,14 +338,11 @@ class RadiationData:
         for idx, r in enumerate(self.readings):
             row_idx = idx // cols
             col_in_row = idx % cols
-            # How many points actually sit on this row
             pts_in_this_row = min(cols, n - row_idx * cols)
 
-            # Top-to-bottom latitude progression
-            lat_t = 0.5 if rows == 1 else row_idx / float(rows - 1)
+            lat_t = 0.5 if rows <= 1 else row_idx / float(rows - 1)
             lat = inner_lat_max - lat_t * (inner_lat_max - inner_lat_min)
 
-            # Serpentine (boustrophedon) left-to-right on even rows, right-to-left on odd rows
             lon_t = 0.5 if pts_in_this_row <= 1 else col_in_row / float(pts_in_this_row - 1)
             if row_idx % 2 == 1:
                 lon_t = 1.0 - lon_t
@@ -359,7 +368,7 @@ class RadiationData:
 
         self.nodes = nodes
 
-        # Interpolate onto 56 × 38 grid inside the survey boundary using IDW in log10 space
+        # Interpolate onto 56 × 38 grid inside the survey boundary
         grid_lats = np.linspace(self.lat_max, self.lat_min, GRID_ROWS)
         grid_lons = np.linspace(self.lon_min, self.lon_max, GRID_COLS)
         lon_mesh, lat_mesh = np.meshgrid(grid_lons, grid_lats)
@@ -368,15 +377,14 @@ class RadiationData:
         node_lons = np.array([pt["lon"] for pt in nodes])[:, None, None]
         node_log_doses = np.log10(np.maximum(0.01, np.array([pt["dose"] for pt in nodes])))[:, None, None]
 
-        # Normalize coordinates to unit square so aspect ratio doesn't skew kernel
         dy = (lat_mesh[None, :, :] - node_lats) / lat_span
         dx = (lon_mesh[None, :, :] - node_lons) / lon_span
         dist_sq = dx * dx + dy * dy
 
-        # Smooth Gaussian + IDW hybrid weights for natural plume/field appearance
-        sigma = 0.14
+        # Adaptive bandwidth for dense (1000+ pt) vs sparse grids
+        sigma = 0.045 if n > 200 else 0.135
         weights = np.exp(-dist_sq / (2.0 * sigma * sigma)) + 1.0 / (
-            np.power(dist_sq + 0.0015, 1.35)
+            np.power(dist_sq + 0.0004, 1.5)
         )
         interp_log = np.sum(weights * node_log_doses, axis=0) / np.sum(weights, axis=0)
         self.grid_matrix = np.power(10.0, interp_log)
@@ -405,19 +413,12 @@ class RadiationData:
 # 4. REFERENCE SAMPLE FIELD (48-POINT MULTI-TIER SPEC FROM DESIGN HANDOFF)
 # ============================================================================
 
-# Exact 48-reading 8×6 lawnmower grid from the ISOTOPER B15 design specification
 SAMPLE_FIELD_DOSES = [
-    # Row 1 (L -> R)
     0.112, 0.125, 0.142, 0.158, 0.164, 0.149, 0.131, 0.118,
-    # Row 2 (R -> L)
     0.145, 8.870, 2.980, 0.617, 0.185, 1.110, 0.192, 0.134,
-    # Row 3 (L -> R)
     0.156, 0.735, 2.250, 8.440, 23.20, 17.80, 0.195, 0.148,
-    # Row 4 (R -> L)
     0.162, 3.320, 16.20, 13.20, 5.160, 1.450, 0.245, 0.152,
-    # Row 5 (L -> R)
     0.175, 1.440, 4.080, 7.150, 4.960, 0.643, 0.285, 0.160,
-    # Row 6 (R -> L)
     0.138, 0.182, 0.295, 1.170, 2.310, 1.750, 0.783, 0.215,
 ]
 
@@ -444,80 +445,20 @@ class RadiationMapGenerator:
         self.center_lat = (self.radiation_data.lat_min + self.radiation_data.lat_max) / 2.0
         self.center_lon = (self.radiation_data.lon_min + self.radiation_data.lon_max) / 2.0
 
-    def create_folium_reference_map(self) -> folium.Map:
-        """
-        Build a Folium map object with CARTO Dark Matter, OpenStreetMap,
-        CARTO Positron, and Esri Satellite layers plus survey boundary and nodes.
-        """
-        fmap = folium.Map(
-            location=[self.center_lat, self.center_lon],
-            zoom_start=18,
-            tiles="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-            attr="© OpenStreetMap contributors · © CARTO",
-            control_scale=True,
-        )
-        folium.TileLayer("OpenStreetMap", name="OpenStreetMap").add_to(fmap)
-        folium.TileLayer("CartoDB positron", name="CARTO Light").add_to(fmap)
-        folium.TileLayer(
-            tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-            attr="Esri",
-            name="Satellite",
-        ).add_to(fmap)
-
-        # Survey boundary polygon
-        bounds_ring = [
-            [self.radiation_data.lat_min, self.radiation_data.lon_min],
-            [self.radiation_data.lat_max, self.radiation_data.lon_min],
-            [self.radiation_data.lat_max, self.radiation_data.lon_max],
-            [self.radiation_data.lat_min, self.radiation_data.lon_max],
-        ]
-        folium.Polygon(
-            locations=bounds_ring,
-            color="#94A3B8",
-            weight=1.5,
-            dash_array="6, 6",
-            fill=False,
-            popup="Survey Boundary",
-        ).add_to(fmap)
-
-        # Flight path polyline
-        path_coords = [[pt["lat"], pt["lon"]] for pt in self.radiation_data.nodes]
-        if len(path_coords) > 1:
-            folium.PolyLine(
-                locations=path_coords,
-                color="#94A3B8",
-                weight=1.2,
-                opacity=0.65,
-                dash_array="4, 6",
-            ).add_to(fmap)
-
-        # Measurement nodes
-        for pt in self.radiation_data.nodes:
-            folium.CircleMarker(
-                location=[pt["lat"], pt["lon"]],
-                radius=7,
-                color="#0F1217",
-                weight=2,
-                fill=True,
-                fill_color=pt["color"],
-                fill_opacity=1.0,
-                popup=f"Node #{pt['id']}: {pt['dose']:.4f} µSv/h ({pt['tierName']})",
-            ).add_to(fmap)
-
-        LayerControl(position="topright").add_to(fmap)
-        return fmap
-
     def build_interactive_html(self, default_view: str = "split") -> str:
         """
         Render the complete ISOTOPER B15 Ground Control Radiation Dose Map HTML
-        matching the Developer Handoff specification (Images 1 & 2) with:
-          - Live Google Sheets GM Counter API sync + zero-reading filter
-          - User-editable Start/End Latitude & Longitude survey box + Map Click Picker
-          - 56 × 38 log-scale continuous & stepped-tier interpolation engine
-          - Side-by-side or single-canvas Interpolated Distribution & Measurement Nodes
-          - Field Statistics, Risk Distribution, and Annual Dose at Peak cards
+        with all 1,082+ valid Google Sheet readings baked in AND live Google Sheet
+        CSV synchronization in the browser.
         """
+        # Compact array format [dose, cpm, cps, timestamp] for fast load of 1,082+ points
+        compact_readings = [
+            [r["dose"], r["cpm"], r["cps"], r["timestamp"]]
+            for r in self.radiation_data.readings
+        ]
+
         initial_payload = {
+            "sheetCsvUrl": GOOGLE_SHEET_CSV_URL,
             "apiUrl": GM_MACRO_URL,
             "defaultView": default_view,
             "defaultBounds": {
@@ -527,7 +468,7 @@ class RadiationMapGenerator:
                 "lon2": self.radiation_data.lon_max,
                 "label": DEFAULT_SURVEY_BOUNDS["label"],
             },
-            "prefetchedReadings": self.radiation_data.readings,
+            "compactReadings": compact_readings,
             "rawCount": self.radiation_data.raw_count,
             "zeroFilteredCount": self.radiation_data.zero_filtered_count,
             "sampleFieldDoses": SAMPLE_FIELD_DOSES,
@@ -558,9 +499,8 @@ class RadiationMapGenerator:
             },
         }
 
-        payload_json = json.dumps(initial_payload, ensure_ascii=False)
-        html_template = _HTML_TEMPLATE.replace("__INITIAL_PAYLOAD_JSON__", payload_json)
-        return html_template
+        payload_json = json.dumps(initial_payload, ensure_ascii=False, separators=(",", ":"))
+        return _HTML_TEMPLATE.replace("__INITIAL_PAYLOAD_JSON__", payload_json)
 
     def save_map(self, filename: str = "radiation_map_light.html") -> str:
         """Save both radiation_dispersion_map.html and radiation_map_light.html."""
@@ -1092,6 +1032,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap;
             gap: 8px;
         }
 
@@ -1108,6 +1049,25 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             font-family: var(--font-mono);
             font-size: 0.71rem;
             color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .mini-toggle-btn {
+            background: var(--bg-card-inner);
+            border: 1px solid var(--border-strong);
+            color: var(--text-main);
+            font-family: var(--font-mono);
+            font-size: 0.66rem;
+            padding: 2px 7px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .mini-toggle-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
         }
 
         .map-viewport {
@@ -1277,8 +1237,8 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
 
         /* Node value pill on Measurement Nodes map */
         .node-val-label {
-            background: rgba(11, 14, 20, 0.85);
-            border: 1px solid rgba(255, 255, 255, 0.14);
+            background: rgba(11, 14, 20, 0.88);
+            border: 1px solid rgba(255, 255, 255, 0.18);
             border-radius: 4px;
             padding: 1px 5px;
             font-family: var(--font-mono);
@@ -1288,6 +1248,27 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             white-space: nowrap;
             box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
             pointer-events: none;
+        }
+
+        /* 40px Cluster Badge from Image 1 Spec (fill = highest reading inside) */
+        .b15-cluster-badge {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 2px solid #0F1217;
+            box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.65), 0 4px 12px rgba(0, 0, 0, 0.65);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform 0.15s ease;
+        }
+
+        .b15-cluster-badge:hover {
+            transform: scale(1.1);
         }
 
         /* ---------------- BOTTOM 3 STATISTICS CARDS ---------------- */
@@ -1491,9 +1472,9 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             <div class="b15-title-group">
                 <div class="b15-eyebrow">
                     <span>ISOTOPER B15 · GROUND CONTROL</span>
-                    <button class="b15-badge" id="btnSourceToggle" title="Click to toggle between Live Google Sheets GM Counter data and Reference Sample Field">
+                    <button class="b15-badge" id="btnSourceToggle" title="Click to toggle between Full Google Sheet GM Data and 48-pt Sample Field">
                         <span class="b15-badge-dot" id="sourceDot"></span>
-                        <span id="sourceBadgeText">LIVE GM SHEET</span>
+                        <span id="sourceBadgeText">FULL GM SHEET</span>
                     </button>
                 </div>
                 <h1 class="b15-title">Radiation dose map</h1>
@@ -1565,8 +1546,8 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
                 <button class="action-btn" onclick="resetMistCoordinates()">
                     <span>↺ MIST Default</span>
                 </button>
-                <button class="action-btn" id="btnSyncSheet" onclick="fetchLiveGmSheet(true)">
-                    <span>⟳ Sync GM Sheet</span>
+                <button class="action-btn" id="btnSyncSheet" onclick="fetchFullGoogleSheet(true)">
+                    <span>⟳ Sync All Sheet Rows</span>
                 </button>
                 <div class="feed-status" id="feedStatusText">
                     Ready
@@ -1617,7 +1598,12 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             <div class="map-panel" id="panel-nodes">
                 <div class="map-panel-header">
                     <div class="map-panel-title">MEASUREMENT NODES</div>
-                    <div class="map-panel-meta" id="nodesMetaLabel">-- GM-tube readings · tier colors</div>
+                    <div class="map-panel-meta">
+                        <span id="nodesMetaLabel">-- GM-tube readings · tier colors</span>
+                        <button class="mini-toggle-btn" id="btnClusterToggle" onclick="toggleNodeClusterMode()">
+                            Mode: All Nodes
+                        </button>
+                    </div>
                 </div>
                 <div class="map-viewport">
                     <div id="mapNodes" class="leaflet-map"></div>
@@ -1705,30 +1691,40 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
         // =========================================================================
         const INITIAL = __INITIAL_PAYLOAD_JSON__;
         const CFG = INITIAL.config;
-        const STORAGE_KEY = 'isotoper_b15_survey_state_v2';
+        const STORAGE_KEY = 'isotoper_b15_survey_state_v3';
 
         const urlParams = new URLSearchParams(window.location.search);
         const requestedLayout = urlParams.get('layout') || INITIAL.defaultView || 'split';
 
+        function expandCompactReadings(compactList) {
+            return (compactList || []).map((arr, idx) => ({
+                id: idx + 1,
+                dose: arr[0],
+                cpm: arr[1],
+                cps: arr[2],
+                timestamp: arr[3] || '',
+            }));
+        }
+
         let state = {
-            dataSource: 'live', // 'live' (Google Sheets GM API) or 'sample' (48-node spec field)
+            dataSource: 'live', // 'live' (Full Google Sheet 1,082 valid rows) or 'sample' (48-node spec)
             scaleMode: 'continuous', // 'continuous' or 'stepped'
-            basemap: 'dark', // 'dark' | 'osm' | 'sat'
+            nodeDisplayMode: 'all', // 'all' (all 1,082 discrete points) or 'clusters' (40px highest-reading cluster badges)
+            basemap: 'dark',
             showHeat: true,
             showPoints: true,
             showPath: true,
             bounds: { ...INITIAL.defaultBounds },
-            liveReadings: Array.isArray(INITIAL.prefetchedReadings) ? INITIAL.prefetchedReadings : [],
+            liveReadings: expandCompactReadings(INITIAL.compactReadings),
             rawCount: INITIAL.rawCount || 0,
             zeroFiltered: INITIAL.zeroFilteredCount || 0,
             nodes: [],
-            grid: [], // 38 rows × 56 cols
+            grid: [],
             peakCell: null,
             pickingStep: 0,
             tempCorner1: null,
         };
 
-        // Restore saved user coordinates if present
         try {
             const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
             if (saved && saved.bounds) {
@@ -1793,7 +1789,6 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
         // 3. BUILD STATIC UI ELEMENTS FROM CONFIG
         // =========================================================================
         function initStaticUI() {
-            // Apply single/split layout if requested
             const gridEl = document.getElementById('mapsGridContainer');
             if (requestedLayout === 'interpolated') {
                 gridEl.classList.add('single-interp');
@@ -1801,13 +1796,11 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
                 gridEl.classList.add('single-nodes');
             }
 
-            // Populate coordinate inputs
             document.getElementById('inLat1').value = Number(state.bounds.lat1).toFixed(6);
             document.getElementById('inLon1').value = Number(state.bounds.lon1).toFixed(6);
             document.getElementById('inLat2').value = Number(state.bounds.lat2).toFixed(6);
             document.getElementById('inLon2').value = Number(state.bounds.lon2).toFixed(6);
 
-            // Populate 5 Tier Cards
             const tierContainer = document.getElementById('tierCardsContainer');
             tierContainer.innerHTML = CFG.tiers.map(t => `
                 <div class="tier-card">
@@ -1820,7 +1813,6 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
                 </div>
             `).join('');
 
-            // Populate Nodes Legend Pill
             const pill = document.getElementById('nodesLegendPill');
             pill.innerHTML = CFG.tiers.map(t => `
                 <span class="nodes-legend-item">
@@ -1829,12 +1821,14 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
                 </span>
             `).join('');
 
-            // Source toggle button handler
             document.getElementById('btnSourceToggle').addEventListener('click', () => {
                 state.dataSource = state.dataSource === 'live' ? 'sample' : 'live';
                 saveState();
                 recomputeAndRender(false);
             });
+
+            document.getElementById('feedStatusText').textContent =
+                `Full Sheet Loaded: ${state.liveReadings.length} valid pts (${state.zeroFiltered} zeros filtered from ${state.rawCount} rows)`;
         }
 
         // =========================================================================
@@ -1899,7 +1893,6 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             pointsLayerNodes = L.layerGroup().addTo(mapNodes);
             peakLayerInterp = L.layerGroup().addTo(mapInterp);
 
-            // Synchronize pan & zoom between Interpolated and Measurement Nodes maps
             function syncMap(source, target) {
                 source.on('moveend zoomend', () => {
                     if (isSyncingMaps) return;
@@ -1911,7 +1904,6 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             syncMap(mapInterp, mapNodes);
             syncMap(mapNodes, mapInterp);
 
-            // Interactive hover readout on Interpolated map inside survey boundary
             mapInterp.on('mousemove', onInterpMouseMove);
             mapInterp.on('mouseout', () => {
                 if (cursorMarkerInterp) {
@@ -1920,11 +1912,9 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
                 }
             });
 
-            // Map click handler for 2-corner area picking
             mapInterp.on('click', onMapClickForCorner);
             mapNodes.on('click', onMapClickForCorner);
 
-            // Auto-invalidate size when hidden tab/iframe becomes visible
             if (typeof ResizeObserver !== 'undefined') {
                 const ro = new ResizeObserver(() => {
                     mapInterp.invalidateSize();
@@ -1944,7 +1934,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
         }
 
         // =========================================================================
-        // 5. SPATIAL INTERPOLATION ENGINE (56 × 38 GRID INSIDE SURVEY BOUNDARY)
+        // 5. SPATIAL INTERPOLATION ENGINE (ALL 1,082+ NODES -> 56 × 38 GRID)
         // =========================================================================
         function getActiveReadings() {
             if (state.dataSource === 'sample') {
@@ -1953,7 +1943,6 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
                     dose: d,
                     cpm: Math.round((d / 0.00812) * 10) / 10,
                     cps: Math.round(((d / 0.00812) / 60) * 100) / 100,
-                    status: getTier(d).name,
                     timestamp: 'Reference Survey Field',
                 }));
             }
@@ -1973,12 +1962,14 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             const latSpan = Math.max(1e-6, latMax - latMin);
             const lonSpan = Math.max(1e-6, lonMax - lonMin);
 
-            // Determine lawnmower grid dimensions (6 rows × 8 cols for 48 readings, or adaptive)
-            const rows = state.dataSource === 'sample' ? 6 : Math.max(2, Math.min(10, Math.round(Math.sqrt(n * 0.75))));
+            // Serpentine flight grid proportional to N (e.g. 26 rows × 42 cols for 1,082 readings)
+            const rows = state.dataSource === 'sample'
+                ? 6
+                : Math.max(2, Math.round(Math.sqrt(n * 0.62)));
             const cols = Math.max(2, Math.ceil(n / rows));
 
-            const padLat = latSpan * 0.07;
-            const padLon = lonSpan * 0.06;
+            const padLat = latSpan * 0.05;
+            const padLon = lonSpan * 0.05;
             const innerLatMin = latMin + padLat;
             const innerLatMax = latMax - padLat;
             const innerLonMin = lonMin + padLon;
@@ -2022,10 +2013,18 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             let maxDose = -1;
             let peakCell = null;
 
-            const logDoses = nodes.map(pt => Math.log10(Math.max(0.01, pt.dose)));
-            const normLats = nodes.map(pt => (pt.lat - latMin) / latSpan);
-            const normLons = nodes.map(pt => (pt.lon - lonMin) / lonSpan);
-            const sigma2 = 2.0 * 0.135 * 0.135;
+            const logDoses = new Float64Array(n);
+            const normLats = new Float64Array(n);
+            const normLons = new Float64Array(n);
+            for (let k = 0; k < n; k++) {
+                logDoses[k] = Math.log10(Math.max(0.01, nodes[k].dose));
+                normLats[k] = (nodes[k].lat - latMin) / latSpan;
+                normLons[k] = (nodes[k].lon - lonMin) / lonSpan;
+            }
+
+            const sigma = n > 200 ? 0.045 : 0.135;
+            const sigma2 = 2.0 * sigma * sigma;
+            const eps = n > 200 ? 0.0004 : 0.0012;
 
             for (let r = 0; r < G_ROWS; r++) {
                 const rowArr = [];
@@ -2042,7 +2041,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
                         const dx = nx - normLons[k];
                         const dy = ny - normLats[k];
                         const d2 = dx * dx + dy * dy;
-                        const w = Math.exp(-d2 / sigma2) + 1.0 / Math.pow(d2 + 0.0012, 1.4);
+                        const w = Math.exp(-d2 / sigma2) + 1.0 / Math.pow(d2 + eps, 1.45);
                         wSum += w;
                         vSum += w * logDoses[k];
                     }
@@ -2070,12 +2069,11 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
         }
 
         // =========================================================================
-        // 6. RENDER HEAT OVERLAY, SURVEY BOUNDARY, FLIGHT PATH, NODES & STATS
+        // 6. RENDER HEAT OVERLAY, SURVEY BOUNDARY, FLIGHT PATH, NODES & CLUSTERS
         // =========================================================================
         function renderHeatCanvasDataUrl() {
             const G_ROWS = CFG.gridRows;
             const G_COLS = CFG.gridCols;
-            // High-res upsampled canvas for smooth rendering inside survey boundary
             const scale = 6;
             const width = G_COLS * scale;
             const height = G_ROWS * scale;
@@ -2099,7 +2097,6 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
                     const c1 = Math.min(G_COLS - 1, c0 + 1);
                     const tx = gx - c0;
 
-                    // Bilinear interpolation across the 56 × 38 grid cells
                     const v00 = state.grid[r0][c0];
                     const v10 = state.grid[r0][c1];
                     const v01 = state.grid[r1][c0];
@@ -2115,11 +2112,145 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
                     data[idx] = rgb[0];
                     data[idx + 1] = rgb[1];
                     data[idx + 2] = rgb[2];
-                    data[idx + 3] = 208; // ~81.5% opacity (within 75-85% spec rule)
+                    data[idx + 3] = 208; // ~81.5% opacity
                 }
             }
             ctx.putImageData(imgData, 0, 0);
             return canvas.toDataURL('image/png');
+        }
+
+        function bindNodePopup(marker, pt) {
+            const popupHtml = `
+                <div style="font-family:var(--font-sans);min-width:215px;padding:2px;">
+                    <div style="font-family:var(--font-mono);font-size:0.68rem;color:#9CA3AF;text-transform:uppercase;">
+                        NODE #${pt.id} · ${pt.tier.name.toUpperCase()}
+                    </div>
+                    <div style="font-family:var(--font-mono);font-size:1.15rem;font-weight:700;color:#FFF;margin:3px 0;">
+                        ${formatDose(pt.dose)} <span style="font-size:0.75rem;color:#9CA3AF;">µSv/h</span>
+                    </div>
+                    <div style="font-size:0.74rem;color:${pt.tier.color};font-weight:600;margin-bottom:6px;">
+                        ● ${pt.tier.name} · ${pt.annualMSv.toFixed(2)} mSv/yr
+                    </div>
+                    <div style="font-family:var(--font-mono);font-size:0.7rem;color:#D1D5DB;line-height:1.5;border-top:1px solid rgba(255,255,255,0.1);padding-top:5px;">
+                        <div>CPM: ${pt.cpm} | CPS: ${pt.cps}</div>
+                        ${pt.timestamp ? `<div>Time: ${pt.timestamp}</div>` : ''}
+                        <div>Lat: ${pt.lat.toFixed(6)}°N</div>
+                        <div>Lon: ${pt.lon.toFixed(6)}°E</div>
+                    </div>
+                </div>
+            `;
+            marker.bindPopup(popupHtml);
+        }
+
+        function renderMeasurementNodesLayer(latMin, latMax, lonMin, lonMax) {
+            pointsLayerNodes.clearLayers();
+            const n = state.nodes.length;
+            if (n === 0) return;
+
+            if (state.nodeDisplayMode === 'clusters') {
+                // 40px Cluster Badges from Image 1 Spec: fill = highest reading inside, never the point count
+                const cRows = 5;
+                const cCols = 7;
+                const latStep = (latMax - latMin) / cRows;
+                const lonStep = (lonMax - lonMin) / cCols;
+                const buckets = new Map();
+
+                state.nodes.forEach(pt => {
+                    const br = Math.min(cRows - 1, Math.max(0, Math.floor((latMax - pt.lat) / latStep)));
+                    const bc = Math.min(cCols - 1, Math.max(0, Math.floor((pt.lon - lonMin) / lonStep)));
+                    const key = `${br}_${bc}`;
+                    if (!buckets.has(key)) {
+                        buckets.set(key, { count: 0, maxDose: -1, maxPt: null, sumLat: 0, sumLon: 0 });
+                    }
+                    const b = buckets.get(key);
+                    b.count++;
+                    b.sumLat += pt.lat;
+                    b.sumLon += pt.lon;
+                    if (pt.dose > b.maxDose) {
+                        b.maxDose = pt.dose;
+                        b.maxPt = pt;
+                    }
+                });
+
+                buckets.forEach(b => {
+                    const tier = getTier(b.maxDose);
+                    const cLat = b.sumLat / b.count;
+                    const cLon = b.sumLon / b.count;
+                    const badgeHtml = `
+                        <div class="b15-cluster-badge" style="background:${tier.color};color:${tier.textColor};" title="Cluster (${b.count} readings) · Peak: ${formatDose(b.maxDose)} µSv/h (${tier.name})">
+                            ${b.count}
+                        </div>
+                    `;
+                    const m = L.marker([cLat, cLon], {
+                        icon: L.divIcon({
+                            className: '',
+                            html: badgeHtml,
+                            iconSize: [40, 40],
+                            iconAnchor: [20, 20],
+                        }),
+                    }).addTo(pointsLayerNodes);
+                    bindNodePopup(m, b.maxPt);
+                });
+                return;
+            }
+
+            // All Nodes Mode: Plot all 1,082+ points cleanly!
+            // Sort so Moderate/High/Severe render on top of Safe/Low points
+            const isDense = n > 200;
+            const baseRadius = isDense ? 4.2 : 7.0;
+
+            state.nodes.forEach(pt => {
+                const isHot = pt.dose >= 0.5;
+                const r = isDense ? (pt.dose >= 10 ? 6.5 : (isHot ? 5.2 : baseRadius)) : 7.0;
+
+                if (!isDense || isHot) {
+                    L.circleMarker([pt.lat, pt.lon], {
+                        radius: r + 1.0,
+                        color: 'rgba(255, 255, 255, 0.55)',
+                        weight: 1,
+                        fill: false,
+                        interactive: false,
+                    }).addTo(pointsLayerNodes);
+                }
+
+                const marker = L.circleMarker([pt.lat, pt.lon], {
+                    radius: r,
+                    color: '#0F1217',
+                    weight: isDense ? 1.4 : 2.0,
+                    fillColor: pt.tier.color,
+                    fillOpacity: 1.0,
+                }).addTo(pointsLayerNodes);
+
+                bindNodePopup(marker, pt);
+            });
+
+            // Place non-overlapping numeric dose labels on top hotspot nodes
+            const sortedHot = [...state.nodes]
+                .filter(pt => pt.dose >= 0.5)
+                .sort((a, b) => b.dose - a.dose);
+
+            const labeledCoords = [];
+            const minSepLat = (latMax - latMin) * 0.085;
+            const minSepLon = (lonMax - lonMin) * 0.11;
+
+            for (const pt of sortedHot) {
+                if (labeledCoords.length >= 16) break;
+                const tooClose = labeledCoords.some(
+                    o => Math.abs(o.lat - pt.lat) < minSepLat && Math.abs(o.lon - pt.lon) < minSepLon
+                );
+                if (tooClose) continue;
+                labeledCoords.push(pt);
+
+                L.marker([pt.lat, pt.lon], {
+                    icon: L.divIcon({
+                        className: '',
+                        html: `<span class="node-val-label">${formatDose(pt.dose)}</span>`,
+                        iconSize: [44, 18],
+                        iconAnchor: [-8, 9],
+                    }),
+                    interactive: false,
+                }).addTo(pointsLayerNodes);
+            }
         }
 
         function renderMaps(fitCamera = false) {
@@ -2174,102 +2305,44 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
                 const latlngs = state.nodes.map(pt => [pt.lat, pt.lon]);
                 L.polyline(latlngs, {
                     color: '#E5E7EB',
-                    weight: 1.1,
-                    opacity: 0.45,
+                    weight: 1.0,
+                    opacity: 0.35,
                     dashArray: '3, 5',
                     interactive: false,
                 }).addTo(pathLayerInterp);
 
                 L.polyline(latlngs, {
                     color: '#9CA3AF',
-                    weight: 1.2,
-                    opacity: 0.55,
+                    weight: 1.0,
+                    opacity: 0.42,
                     dashArray: '4, 5',
                     interactive: false,
                 }).addTo(pathLayerNodes);
             }
 
-            // 4. Sample Points on Interpolated map + Tier-colored Nodes on Measurement Nodes map
+            // 4. Sample Points on Interpolated map
             pointsLayerInterp.clearLayers();
-            pointsLayerNodes.clearLayers();
-
             if (state.showPoints) {
+                const isDense = state.nodes.length > 200;
                 state.nodes.forEach(pt => {
-                    // Small white sample dot on Interpolated Distribution map
                     L.circleMarker([pt.lat, pt.lon], {
-                        radius: 2.8,
+                        radius: isDense ? 1.9 : 2.8,
                         color: '#0F1217',
-                        weight: 1.2,
+                        weight: 0.9,
                         fillColor: '#FFFFFF',
-                        fillOpacity: 0.95,
+                        fillOpacity: isDense ? 0.75 : 0.95,
                         interactive: false,
                     }).addTo(pointsLayerInterp);
                 });
             }
 
-            // Measurement Nodes (14px circle = 7px radius, 2px #0F1217 stroke, 1px white halo at 55%)
-            state.nodes.forEach((pt, idx) => {
-                // Outer 1px white halo at 55%
-                L.circleMarker([pt.lat, pt.lon], {
-                    radius: 8,
-                    color: 'rgba(255, 255, 255, 0.55)',
-                    weight: 1,
-                    fill: false,
-                    interactive: false,
-                }).addTo(pointsLayerNodes);
+            // 5. Measurement Nodes (All 1,082+ points or 40px Cluster Badges)
+            renderMeasurementNodesLayer(latMin, latMax, lonMin, lonMax);
 
-                // Main 14px node marker
-                const marker = L.circleMarker([pt.lat, pt.lon], {
-                    radius: 7,
-                    color: '#0F1217',
-                    weight: 2,
-                    fillColor: pt.tier.color,
-                    fillOpacity: 1.0,
-                }).addTo(pointsLayerNodes);
-
-                const popupHtml = `
-                    <div style="font-family:var(--font-sans);min-width:210px;padding:2px;">
-                        <div style="font-family:var(--font-mono);font-size:0.68rem;color:#9CA3AF;text-transform:uppercase;">
-                            NODE #${pt.id} · ${pt.tier.name.toUpperCase()}
-                        </div>
-                        <div style="font-family:var(--font-mono);font-size:1.15rem;font-weight:700;color:#FFF;margin:3px 0;">
-                            ${formatDose(pt.dose)} <span style="font-size:0.75rem;color:#9CA3AF;">µSv/h</span>
-                        </div>
-                        <div style="font-size:0.74rem;color:${pt.tier.color};font-weight:600;margin-bottom:6px;">
-                            ● ${pt.tier.name} · ${pt.annualMSv.toFixed(2)} mSv/yr
-                        </div>
-                        <div style="font-family:var(--font-mono);font-size:0.7rem;color:#D1D5DB;line-height:1.5;border-top:1px solid rgba(255,255,255,0.1);padding-top:5px;">
-                            <div>CPM: ${pt.cpm} | CPS: ${pt.cps}</div>
-                            <div>Lat: ${pt.lat.toFixed(6)}°N</div>
-                            <div>Lon: ${pt.lon.toFixed(6)}°E</div>
-                        </div>
-                    </div>
-                `;
-                marker.bindPopup(popupHtml);
-
-                // Show numeric dose pill beside elevated readings (or representative nodes when all Safe/Low)
-                const showValueLabel =
-                    pt.dose >= 0.5 ||
-                    (state.peakCell && state.peakCell.dose < 0.6 && idx % Math.max(1, Math.floor(state.nodes.length / 18)) === 0);
-
-                if (showValueLabel) {
-                    L.marker([pt.lat, pt.lon], {
-                        icon: L.divIcon({
-                            className: '',
-                            html: `<span class="node-val-label">${formatDose(pt.dose)}</span>`,
-                            iconSize: [44, 18],
-                            iconAnchor: [-10, 9],
-                        }),
-                        interactive: false,
-                    }).addTo(pointsLayerNodes);
-                }
-            });
-
-            // 5. Peak Reading Ring (26px) + Readout Card on Interpolated Map
+            // 6. Peak Reading Ring (26px) + Readout Card on Interpolated Map
             peakLayerInterp.clearLayers();
             if (state.peakCell) {
                 const pk = state.peakCell;
-                // 26px ring (radius 13)
                 L.circleMarker([pk.lat, pk.lon], {
                     radius: 13,
                     color: '#FFFFFF',
@@ -2293,18 +2366,17 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
                     icon: L.divIcon({
                         className: '',
                         html: cardHtml,
-                        iconSize: [165, 68],
-                        iconAnchor: [178, 34],
+                        iconSize: [168, 68],
+                        iconAnchor: [180, 34],
                     }),
                     interactive: false,
                 }).addTo(peakLayerInterp);
             }
 
-            // Update panel headers
             document.getElementById('interpMetaLabel').textContent =
                 `${CFG.gridCols} × ${CFG.gridRows} grid · ${state.scaleMode === 'continuous' ? 'continuous log ramp' : 'stepped tiers'}`;
             document.getElementById('nodesMetaLabel').textContent =
-                `${state.nodes.length} GM-tube readings · tier colors`;
+                `${state.nodes.length.toLocaleString()} GM-tube readings · tier colors`;
 
             if (fitCamera) {
                 const padded = surveyBounds.pad(0.18);
@@ -2313,6 +2385,13 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
                 mapNodes.fitBounds(padded, { animate: true });
                 setTimeout(() => { isSyncingMaps = false; }, 350);
             }
+        }
+
+        function toggleNodeClusterMode() {
+            state.nodeDisplayMode = state.nodeDisplayMode === 'all' ? 'clusters' : 'all';
+            document.getElementById('btnClusterToggle').textContent =
+                state.nodeDisplayMode === 'all' ? 'Mode: All Nodes' : 'Mode: 40px Clusters';
+            renderMaps(false);
         }
 
         // =========================================================================
@@ -2403,15 +2482,13 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             }
             const std = Math.sqrt(sqDiff / totalCells);
 
-            // Card 1: Field Statistics
             document.getElementById('statAvg').textContent = formatDose(mean);
             document.getElementById('statMax').textContent = formatDose(maxV);
             document.getElementById('statMin').textContent = formatDose(minV);
             document.getElementById('statStd').textContent = formatDose(std);
             document.getElementById('statCellsFoot').textContent =
-                `µSv/h across ${totalCells.toLocaleString()} grid cells inside the survey boundary`;
+                `µSv/h across ${totalCells.toLocaleString()} grid cells (${state.nodes.length.toLocaleString()} GM points inside survey boundary)`;
 
-            // Card 2: Risk Distribution
             const stackEl = document.getElementById('riskBarStack');
             const listEl = document.getElementById('riskListContainer');
 
@@ -2435,7 +2512,6 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
                 `;
             }).join('');
 
-            // Card 3: Annual Dose at Peak
             const peakAnnualMSv = maxV * (CFG.annualHours / 1000.0);
             const peakTier = getTier(maxV);
 
@@ -2445,7 +2521,6 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             document.getElementById('peakAnnualTierTxt').textContent =
                 `${peakTier.name} · If occupied 8 h/day, 250 days/yr`;
 
-            // Public limit (1 mSv/yr)
             const pubRatio = peakAnnualMSv / CFG.publicLimitMSv;
             const pubBar = document.getElementById('publicLimitBar');
             pubBar.style.width = `${Math.min(100, pubRatio * 100).toFixed(1)}%`;
@@ -2455,7 +2530,6 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
                     ? `Exceeds · ${pubRatio >= 10 ? pubRatio.toFixed(0) : pubRatio.toFixed(1)}×`
                     : `${(pubRatio * 100).toFixed(0)}% of limit`;
 
-            // Worker limit (20 mSv/yr)
             const wrkRatio = peakAnnualMSv / CFG.workerLimitMSv;
             const wrkBar = document.getElementById('workerLimitBar');
             wrkBar.style.width = `${Math.min(100, wrkRatio * 100).toFixed(1)}%`;
@@ -2465,11 +2539,10 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
                     ? `Exceeds · ${wrkRatio.toFixed(1)}×`
                     : `${(wrkRatio * 100).toFixed(1)}% of limit`;
 
-            // Update Top Source Badge
             const badgeTxt = document.getElementById('sourceBadgeText');
             const badgeDot = document.getElementById('sourceDot');
             if (state.dataSource === 'live') {
-                badgeTxt.textContent = `LIVE GM SHEET (${state.liveReadings.length} PTS)`;
+                badgeTxt.textContent = `FULL GM SHEET (${state.liveReadings.length.toLocaleString()} PTS)`;
                 badgeDot.style.background = '#22C55E';
                 badgeDot.style.boxShadow = '0 0 6px #22C55E';
             } else {
@@ -2480,7 +2553,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
         }
 
         // =========================================================================
-        // 9. USER CONTROLS: LAT/LON INPUTS, MAP PICKER, LIVE GOOGLE SHEETS FETCH
+        // 9. USER CONTROLS & FULL GOOGLE SHEET LIVE CSV PARSER
         // =========================================================================
         function recomputeAndRender(fitCamera = false) {
             computeNodesAndGrid();
@@ -2527,7 +2600,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             saveState();
             recomputeAndRender(true);
             document.getElementById('feedStatusText').textContent =
-                `✓ Interpolated [${state.bounds.lat1.toFixed(4)}, ${state.bounds.lon1.toFixed(4)}] → [${state.bounds.lat2.toFixed(4)}, ${state.bounds.lon2.toFixed(4)}]`;
+                `✓ Interpolated ${state.nodes.length.toLocaleString()} pts over [${state.bounds.lat1.toFixed(4)}, ${state.bounds.lon1.toFixed(4)}] → [${state.bounds.lat2.toFixed(4)}, ${state.bounds.lon2.toFixed(4)}]`;
         }
 
         function resetMistCoordinates() {
@@ -2607,53 +2680,73 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             document.getElementById('interpBasemapAttr').textContent = spec.attr;
         }
 
-        async function fetchLiveGmSheet(manualClick = false) {
+        function parseCsvLine(line) {
+            const out = [];
+            let cur = '';
+            let inQuotes = false;
+            for (let i = 0; i < line.length; i++) {
+                const ch = line[i];
+                if (ch === '"') {
+                    inQuotes = !inQuotes;
+                } else if (ch === ',' && !inQuotes) {
+                    out.push(cur.trim());
+                    cur = '';
+                } else {
+                    cur += ch;
+                }
+            }
+            out.push(cur.trim());
+            return out;
+        }
+
+        async function fetchFullGoogleSheet(manualClick = false) {
             const statusEl = document.getElementById('feedStatusText');
-            statusEl.textContent = 'Syncing GM Sheet...';
+            statusEl.textContent = 'Syncing all rows from Google Sheet...';
             try {
-                const resp = await fetch(INITIAL.apiUrl);
-                const data = await resp.json();
-                const rawList = Array.isArray(data.history)
-                    ? data.history
-                    : (data.latest ? [data.latest] : []);
+                const resp = await fetch(INITIAL.sheetCsvUrl);
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const csvText = await resp.text();
+                const lines = csvText.split(/\r?\n/).filter(l => l.trim().length > 0);
 
                 let zeroDropped = 0;
                 const valid = [];
-                rawList.forEach(item => {
-                    const dose = parseFloat(item.dose);
-                    const cpm = parseFloat(item.cpm);
-                    const cps = parseFloat(item.cps || 0);
-                    if (Number.isNaN(dose) || dose <= 0 || Number.isNaN(cpm) || cpm <= 0 || Number.isNaN(cps) || cps <= 0) {
+                // Skip header row (index 0)
+                for (let i = 1; i < lines.length; i++) {
+                    const cols = parseCsvLine(lines[i]);
+                    if (cols.length < 3) continue;
+                    const cps = parseFloat(cols[0]);
+                    const cpm = parseFloat(cols[1]);
+                    const dose = parseFloat(cols[2]);
+                    const timestamp = cols[4] || '';
+
+                    if (Number.isNaN(dose) || Number.isNaN(cpm) || dose <= 0 || cpm <= 0) {
                         zeroDropped++;
-                        return;
+                        continue;
                     }
                     valid.push({
                         id: valid.length + 1,
                         dose,
                         cpm,
-                        cps,
-                        status: item.status || getTier(dose).name,
-                        timestamp: item.timestamp || new Date().toISOString(),
+                        cps: Number.isNaN(cps) ? 0 : cps,
+                        timestamp,
                     });
-                });
+                }
 
                 if (valid.length > 0) {
                     state.liveReadings = valid;
-                    state.rawCount = rawList.length;
+                    state.rawCount = lines.length - 1;
                     state.zeroFiltered = zeroDropped;
                     if (manualClick) state.dataSource = 'live';
                     recomputeAndRender(false);
                     statusEl.textContent =
-                        `Live GM synced: ${valid.length} valid pts (${zeroDropped} zero filtered)`;
-                } else {
-                    statusEl.textContent = `Sheet returned 0 valid readings (${zeroDropped} zeros filtered)`;
+                        `Full Sheet Synced: ${valid.length.toLocaleString()} valid pts (${zeroDropped} zero rows filtered from ${state.rawCount.toLocaleString()})`;
                 }
             } catch (err) {
-                statusEl.textContent = `Using cached GM readings (${state.liveReadings.length} pts)`;
+                statusEl.textContent =
+                    `Loaded ${state.liveReadings.length.toLocaleString()} valid pts (${state.zeroFiltered} zeros filtered)`;
             }
         }
 
-        // Sync across tabs/iframes when user updates coordinates
         window.addEventListener('storage', (ev) => {
             if (ev.key === STORAGE_KEY && ev.newValue) {
                 try {
@@ -2671,12 +2764,11 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
             }
         });
 
-        // Initialize application
         window.addEventListener('DOMContentLoaded', () => {
             initStaticUI();
             initMaps();
             recomputeAndRender(true);
-            fetchLiveGmSheet(false);
+            fetchFullGoogleSheet(false);
         });
     </script>
 </body>
@@ -2690,7 +2782,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate ISOTOPER B15 Radiation Dose Maps from Google Sheets GM Counter API"
+        description="Generate ISOTOPER B15 Radiation Dose Maps from Full Google Sheet"
     )
     parser.add_argument("--lat1", type=float, default=DEFAULT_SURVEY_BOUNDS["lat1"], help="Start Latitude")
     parser.add_argument("--lon1", type=float, default=DEFAULT_SURVEY_BOUNDS["lon1"], help="Start Longitude")
