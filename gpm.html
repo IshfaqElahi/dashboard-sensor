@@ -972,10 +972,10 @@
             z-index: 20;
             background: var(--glass);
             border: 1px solid var(--border);
-            padding: 12px 16px;
-            font-size: .78rem;
+            padding: 10px 14px;
+            font-size: .76rem;
             pointer-events: none;
-            line-height: 1.5;
+            line-height: 1.4;
             border-radius: var(--radius-lg);
             box-shadow: var(--shadow);
             backdrop-filter: blur(12px);
@@ -995,37 +995,65 @@
             }
         }
 
+        /* Compact Horizontal Top-Left Wind Pill */
         #hudW {
-            top: 16px;
-            left: 16px;
+            top: 14px;
+            left: 14px;
             border-left: 3px solid var(--orange);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 14px;
         }
 
-        #hudS {
-            top: 16px;
-            right: 16px;
-            text-align: right;
-            border-right: 3px solid var(--accent);
-        }
-
-        /* BASEMAP SWITCHER HUD (Dark Tactical / OSM Standard / Satellite) */
-        #hudMapSwitch {
-            top: 86px;
-            right: 16px;
-            padding: 6px;
+        /* Unified Top-Right Status + Basemap + Overlay Switcher Bar */
+        #hudTopRight {
+            top: 14px;
+            right: 14px;
+            padding: 6px 10px;
             pointer-events: auto;
             display: flex;
             align-items: center;
-            gap: 4px;
-            border-radius: var(--radius-md);
+            gap: 10px;
+            border-radius: var(--radius-lg);
             z-index: 25;
+            flex-wrap: wrap;
+        }
+
+        .hud-status-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding-right: 10px;
+            border-right: 1px solid var(--border);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--green);
+            box-shadow: 0 0 8px var(--green);
+            animation: pulse 1.8s infinite;
+        }
+
+        .hud-btn-group {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .hud-divider {
+            width: 1px;
+            height: 20px;
+            background: var(--border);
         }
 
         .map-mode-btn {
             font-family: 'JetBrains Mono', monospace;
-            font-size: 0.72rem;
+            font-size: 0.71rem;
             font-weight: 700;
-            padding: 6px 11px;
+            padding: 5px 10px;
             border-radius: 6px;
             border: 1px solid transparent;
             background: transparent;
@@ -1034,13 +1062,13 @@
             transition: all 0.2s ease;
             display: inline-flex;
             align-items: center;
-            gap: 5px;
+            gap: 4px;
             white-space: nowrap;
         }
 
         .map-mode-btn:hover {
             color: var(--text-heading);
-            background: rgba(148, 163, 184, 0.12);
+            background: rgba(148, 163, 184, 0.14);
         }
 
         .map-mode-btn.active {
@@ -1050,37 +1078,134 @@
             box-shadow: 0 2px 10px var(--accent-glow);
         }
 
+        .map-mode-btn.overlay-btn.active {
+            background: rgba(16, 185, 129, 0.16);
+            color: var(--green);
+            border-color: rgba(16, 185, 129, 0.45);
+            box-shadow: none;
+        }
+
         /* API-Key-Free Dark Tactical Filter on Official OpenStreetMap Tiles */
         #map[data-basemap="dark"] .osm-base-layer {
             filter: invert(100%) hue-rotate(180deg) brightness(92%) contrast(92%) saturate(85%);
             -webkit-filter: invert(100%) hue-rotate(180deg) brightness(92%) contrast(92%) saturate(85%);
         }
 
+        /* Unified Bottom-Left Floating Concentration Legend + Cursor Coords */
         #hudC {
-            bottom: 16px;
-            left: 16px;
+            bottom: 14px;
+            left: 14px;
+            min-width: 280px;
+            padding: 10px 14px;
+            border-left: 3px solid var(--accent);
+        }
+
+        /* Sidebar 3-Tab Switcher Bar */
+        .sb-tabs {
+            display: flex;
+            gap: 4px;
+            padding: 10px 14px;
+            background: var(--panel);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 15;
+        }
+
+        .sb-tab-btn {
+            flex: 1;
+            font-family: var(--font-main);
+            font-size: 0.72rem;
+            font-weight: 700;
+            padding: 8px 6px;
+            border-radius: var(--radius-md);
+            border: 1px solid transparent;
+            background: var(--panel-card);
+            color: var(--dim);
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .sb-tab-btn:hover {
+            color: var(--text-heading);
+            border-color: var(--border);
+        }
+
+        .sb-tab-btn.active {
+            background: var(--accent-glow);
+            color: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .sb-pane {
+            display: none;
+            flex-direction: column;
+        }
+
+        .sb-pane.active {
+            display: flex;
+        }
+
+        /* Compact 2x2 Metric Grid Cards inside Sidebar */
+        .metric-grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .metric-box {
+            background: var(--panel-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 9px 11px;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .metric-box .ml {
+            font-size: 0.66rem;
+            color: var(--dim);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            font-weight: 600;
+        }
+
+        .metric-box .mv {
+            font-size: 0.86rem;
+            font-weight: 700;
             font-family: 'JetBrains Mono', monospace;
+            color: var(--text-heading);
         }
 
-        #hudDrone {
-            left: 16px;
-            top: 50%;
-            transform: translateY(-50%);
-            border-left: 3px solid var(--drone);
-            min-width: 220px;
-            animation: hudPopDrone 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) backwards;
+        .coord-grid-3 {
+            display: grid;
+            grid-template-columns: 1fr 1fr 0.8fr;
+            gap: 8px;
+            margin-bottom: 8px;
         }
 
-        @keyframes hudPopDrone {
-            from {
-                opacity: 0;
-                transform: translateY(-50%) translateX(-10px);
-            }
+        .coord-field label {
+            display: block;
+            font-size: 0.66rem;
+            color: var(--dim);
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            margin-bottom: 4px;
+        }
 
-            to {
-                opacity: 1;
-                transform: translateY(-50%) translateX(0);
-            }
+        .locked-inline-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px;
+            padding-top: 8px;
+            border-top: 1px dashed var(--border);
+            font-size: 0.7rem;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--dim);
         }
 
         #tooltip {
@@ -1314,31 +1439,26 @@
                 font-size: 0.7rem;
             }
 
-            #hudS {
+            #hudTopRight {
                 right: 10px;
                 top: 10px;
+                padding: 5px 8px;
+                gap: 6px;
             }
 
-            #hudMapSwitch {
-                right: 10px;
-                top: 72px;
-                padding: 4px;
+            .hud-status-group {
+                display: none;
             }
 
             .map-mode-btn {
-                padding: 5px 8px;
-                font-size: 0.66rem;
+                padding: 4px 7px;
+                font-size: 0.65rem;
             }
 
             #hudW {
                 left: 10px;
                 top: 10px;
-            }
-
-            #hudDrone {
-                left: 10px;
-                transform: translateY(-30%);
-                min-width: 180px;
+                padding: 6px 10px;
             }
 
             #hudC {
@@ -1351,201 +1471,238 @@
 <body>
 
     <div id="topbar">
+        <a href="index.html" class="btn" style="padding:6px 12px;text-decoration:none;" title="Back to Main Telemetry Dashboard">⬅ Dashboard</a>
         <div class="logo">ISOTOPER B15</div>
         <div class="chip chip-r blink">LIVE TELEMETRY</div>
-        <div class="chip chip-o">GAUSSIAN PLUME MODEL</div>
+        <div class="chip chip-o">GAUSSIAN PLUME</div>
         <div class="wstrip" id="wstrip"><span>Establishing connection to station stream&hellip;</span></div>
         <button class="btn" id="btnTheme" onclick="toggleTheme()">☀️ Light Mode</button>
-        <button class="btn" id="btnRefresh" onclick="fetchLiveWeather()">🔄 Synchronize Weather</button>
-        <button class="btn btn-r" onclick="resetDroneToDefault()">↩ Reset Source Core</button>
+        <button class="btn" id="btnRefresh" onclick="fetchLiveWeather()">🔄 Sync Weather</button>
+        <button class="btn btn-r" onclick="resetDroneToDefault()">↩ Reset Source</button>
     </div>
 
     <div id="main">
         <div id="sidebar">
 
-            <div class="sb-sec">
-                <div class="sb-t">Geospatial Target / Source Origin</div>
-                <div class="src-editor">
-                    <div class="src-title">AVIONICS COORD LOCK (MQ-8)</div>
-                    <div class="input-row">
-                        <label>LAT</label>
-                        <input class="coord-input" id="inLat" type="number" step="0.0001" value="23.0942"
-                            placeholder="Latitude">
-                    </div>
-                    <div class="input-row">
-                        <label>LON</label>
-                        <input class="coord-input" id="inLon" type="number" step="0.0001" value="90.0157"
-                            placeholder="Longitude">
-                    </div>
-                    <div class="input-row">
-                        <label>ALT</label>
-                        <input class="coord-input" id="inAlt" type="number" step="1" value="30"
-                            placeholder="B15 altitude (m)">
-                    </div>
-                    <div style="display:flex;gap:6px;margin-top:10px">
-                        <button class="btn" style="flex:1;justify-content: center;"
-                            onclick="applyDronePosition()">Commit Vector</button>
-                        <button class="btn"
-                            style="flex:1;justify-content: center;border-color:var(--yellow);color:var(--yellow)"
-                            onclick="pickFromMap()">Map Intercept</button>
-                    </div>
-                    <div id="pickMsg"
-                        style="display:none;font-size:.7rem;color:var(--yellow);margin-top:8px;text-align:center;font-weight: 500;">
-                        Select grid coordinate directly on canvas</div>
-                </div>
-                <div class="card">
-                    <div class="row"><span>Locked Lat</span><span class="rv rv-d" id="srcLatDisp">23.0942</span></div>
-                    <div class="row"><span>Locked Lon</span><span class="rv rv-d" id="srcLonDisp">90.0157</span></div>
-                    <div class="row"><span>Rel Elevation (z)</span><span class="rv rv-a" id="srcAltDisp">30 m</span>
-                    </div>
-                </div>
+            <!-- Clean 3-Tab Navigation to Eliminate Sidebar Clutter -->
+            <div class="sb-tabs">
+                <button type="button" class="sb-tab-btn active" id="sbTabBtnSource" onclick="switchSidebarTab('source')">📍 Source &amp; MQ-8</button>
+                <button type="button" class="sb-tab-btn" id="sbTabBtnControls" onclick="switchSidebarTab('controls')">🎛️ Plume &amp; Wind</button>
+                <button type="button" class="sb-tab-btn" id="sbTabBtnAnalytics" onclick="switchSidebarTab('analytics')">📊 Matrices &amp; AQI</button>
             </div>
 
-            <div class="sb-sec">
-                <div class="sb-t">Atmospheric Macro-Environment</div>
-                <div class="wind-override">
-                    <div class="wo-title">ANEMOMETER SOURCE INTERFACE</div>
-                    <div class="mode-tabs">
-                        <div class="tab active" id="tabLive" onclick="setWindMode('live')">STATION API</div>
-                        <div class="tab" id="tabManual" onclick="setWindMode('manual')">MANUAL STRAT</div>
-                    </div>
-                    <div id="manualWindPanel" style="display:none">
-                        <div class="ctrl">
-                            <label>Velocity (m/s) <em id="lWS">2.6</em></label>
-                            <input type="range" id="manWS" min="0.1" max="20" step="0.1" value="2.6">
+            <!-- TAB 1: SOURCE ORIGIN & MQ-8 SENSOR -->
+            <div class="sb-pane active" id="sbPaneSource">
+                <div class="sb-sec">
+                    <div class="sb-t">Geospatial Target / Source Origin</div>
+                    <div class="src-editor" style="margin-bottom:0">
+                        <div class="src-title" style="display:flex;justify-content:space-between;align-items:center;">
+                            <span>AVIONICS COORD LOCK (MQ-8)</span>
+                            <span id="droneAlt" style="color:var(--accent);font-family:'JetBrains Mono';font-size:0.68rem;">30m AGL</span>
                         </div>
-                        <div class="ctrl">
-                            <label>Wind Bearing FROM (°) <em id="lWD">315</em></label>
-                            <input type="range" id="manWD" min="0" max="359" step="1" value="315">
+                        <div class="coord-grid-3">
+                            <div class="coord-field">
+                                <label>LAT (°N)</label>
+                                <input class="coord-input" id="inLat" type="number" step="0.0001" value="23.0942" placeholder="Lat" style="padding:7px 8px;">
+                            </div>
+                            <div class="coord-field">
+                                <label>LON (°E)</label>
+                                <input class="coord-input" id="inLon" type="number" step="0.0001" value="90.0157" placeholder="Lon" style="padding:7px 8px;">
+                            </div>
+                            <div class="coord-field">
+                                <label>ALT (m)</label>
+                                <input class="coord-input" id="inAlt" type="number" step="1" value="30" placeholder="Alt" style="padding:7px 8px;">
+                            </div>
+                        </div>
+                        <div style="display:flex;gap:6px;margin-top:8px">
+                            <button class="btn" style="flex:1;justify-content:center;" onclick="applyDronePosition()">Commit Vector</button>
+                            <button class="btn" style="flex:1;justify-content:center;border-color:var(--yellow);color:var(--yellow)" onclick="pickFromMap()">🎯 Map Pick</button>
+                        </div>
+                        <div id="pickMsg" style="display:none;font-size:.7rem;color:var(--yellow);margin-top:8px;text-align:center;font-weight:500;">
+                            Click anywhere on map canvas to lock source origin</div>
+                        <div class="locked-inline-bar">
+                            <span>Locked: <strong id="srcLatDisp" style="color:var(--drone)">23.0942</strong>, <strong id="srcLonDisp" style="color:var(--drone)">90.0157</strong></span>
+                            <span>z = <strong id="srcAltDisp" style="color:var(--accent)">30 m</strong></span>
+                        </div>
+                        <span id="dronePos" style="display:none">23.09422°N 90.01574°E</span>
+                    </div>
+                </div>
+
+                <div class="sb-sec" style="border-bottom:none">
+                    <div class="sb-t">Sensory Node / MQ-8 Core Data</div>
+                    <div class="card" style="border-color:rgba(16, 185, 129, 0.4);background:rgba(16, 185, 129, 0.03);">
+                        <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">
+                            <span style="font-size:.7rem;color:var(--dim);font-family:'JetBrains Mono';">R₀(kΩ)</span>
+                            <input id="mq8Ro" class="coord-input" style="padding:5px 8px;text-align:center" value="10" type="number" step="0.1">
+                            <span style="font-size:.7rem;color:var(--dim);font-family:'JetBrains Mono';">R_L(kΩ)</span>
+                            <input id="mq8RL" class="coord-input" style="padding:5px 8px;text-align:center" value="10" type="number" step="0.1">
+                        </div>
+                        <button class="btn" style="width:100%;justify-content:center;background:var(--accent);color:#fff;border-color:var(--accent)" onclick="fetchSheetData()">⚡ Request Core Bus Sync</button>
+                        <div id="sheetStatus" style="font-size:.7rem;color:var(--dim);margin-top:8px;text-align:center;font-weight:500;">Node unbound — click to sync live MQ-8</div>
+                    </div>
+                    <div class="metric-grid-2">
+                        <div class="metric-box">
+                            <span class="ml">Raw ADC</span>
+                            <span class="mv rv-a" id="mq8ADC">---</span>
+                        </div>
+                        <div class="metric-box">
+                            <span class="ml">Bus EMF</span>
+                            <span class="mv rv-a" id="mq8Volt">---</span>
+                        </div>
+                        <div class="metric-box">
+                            <span class="ml">Ratio Rs/R₀</span>
+                            <span class="mv rv-o" id="mq8RsRo">---</span>
+                        </div>
+                        <div class="metric-box">
+                            <span class="ml">H₂ Concentration</span>
+                            <span class="mv rv-g" id="mq8PPM">---</span>
                         </div>
                     </div>
                 </div>
-                <div class="card">
-                    <div class="row"><span>Wind Velocity</span><span class="rv rv-a" id="lcWind">&mdash;</span></div>
-                    <div class="row"><span>Origin Vector</span><span class="rv rv-a" id="lcDir">&mdash;</span></div>
-                    <div class="row"><span>Plume Trajectory</span><span class="rv rv-o" id="lcPlumeDir">&mdash;</span>
+            </div>
+
+            <!-- TAB 2: PLUME & WIND CONTROLS -->
+            <div class="sb-pane" id="sbPaneControls">
+                <div class="sb-sec">
+                    <div class="sb-t">Atmospheric Wind Vector</div>
+                    <div class="wind-override" style="margin-bottom:10px">
+                        <div class="wo-title">ANEMOMETER SOURCE INTERFACE</div>
+                        <div class="mode-tabs" style="margin-bottom:8px">
+                            <div class="tab active" id="tabLive" onclick="setWindMode('live')">STATION API</div>
+                            <div class="tab" id="tabManual" onclick="setWindMode('manual')">MANUAL STRAT</div>
+                        </div>
+                        <div id="manualWindPanel" style="display:none;padding-top:6px;">
+                            <div class="ctrl">
+                                <label>Velocity (m/s) <em id="lWS">2.6</em></label>
+                                <input type="range" id="manWS" min="0.1" max="20" step="0.1" value="2.6">
+                            </div>
+                            <div class="ctrl">
+                                <label>Wind Bearing FROM (°) <em id="lWD">315</em></label>
+                                <input type="range" id="manWD" min="0" max="359" step="1" value="315">
+                            </div>
+                        </div>
                     </div>
-                    <div class="row"><span>Ambient Temp</span><span class="rv rv-g" id="lcTemp">&mdash;</span></div>
-                    <div class="row"><span>Relative Humidity</span><span class="rv rv-g" id="lcHum">&mdash;</span></div>
-                    <div class="row"><span>Current Profile</span><span class="rv rv-g" id="lcCode">&mdash;</span></div>
+                    <div class="metric-grid-2">
+                        <div class="metric-box">
+                            <span class="ml">Wind Velocity</span>
+                            <span class="mv rv-a" id="lcWind">&mdash;</span>
+                        </div>
+                        <div class="metric-box">
+                            <span class="ml">Origin Vector</span>
+                            <span class="mv rv-a" id="lcDir">&mdash;</span>
+                        </div>
+                        <div class="metric-box">
+                            <span class="ml">Plume Trajectory</span>
+                            <span class="mv rv-o" id="lcPlumeDir">&mdash;</span>
+                        </div>
+                        <div class="metric-box">
+                            <span class="ml">Temp / RH</span>
+                            <span class="mv rv-g"><span id="lcTemp">&mdash;</span> · <span id="lcHum">&mdash;</span></span>
+                        </div>
+                    </div>
+                    <span id="lcCode" style="display:none">&mdash;</span>
+                </div>
+
+                <div class="sb-sec" style="border-bottom:none">
+                    <div class="sb-t">Plume Dispersion Coefficients</div>
+                    <div class="ctrl" style="display:none;">
+                        <label>Mass Emission Rate Q (kg/s) <em id="lQ">0.0005</em></label>
+                        <input type="range" id="Q" min="0.00001" max="0.05" step="0.00001" value="0.0005">
+                    </div>
+                    <div class="ctrl">
+                        <label>Max Boundary Range (m) <em id="lRange">1000</em></label>
+                        <input type="range" id="maxRange" min="100" max="5000" step="50" value="1000">
+                    </div>
+                    <div class="ctrl">
+                        <label>Virtual Plume Elevation H (m) <em id="lH">30</em></label>
+                        <input type="range" id="Heff" min="0" max="100" step="0.5" value="30">
+                    </div>
+                    <div class="ctrl">
+                        <label>Pasquill Stability Class <em id="lsc">Near Neutral</em></label>
+                        <select id="stability">
+                            <option value="A">A — Extreme Thermal Instability</option>
+                            <option value="B">B — Moderate Instability</option>
+                            <option value="C">C — Minor Instability</option>
+                            <option value="D" selected>D — Neutral Matrix Standard</option>
+                            <option value="E">E — Moderate Micro-Stability</option>
+                            <option value="F">F — Extreme Stability Stratum</option>
+                        </select>
+                    </div>
+                    <div class="ctrl">
+                        <label>Cross-Section Z Plane (m) <em id="lZslice">0</em></label>
+                        <input type="range" id="Zslice" min="0" max="80" step="1" value="0">
+                    </div>
+                    <div class="ctrl">
+                        <label>Canvas Overlay Opacity <em id="lopac">0.80</em></label>
+                        <input type="range" id="opacity" min="0.1" max="1" step="0.05" value="0.80">
+                    </div>
                 </div>
             </div>
 
-            <div class="sb-sec">
-                <div class="sb-t">Gaussian 3D System Matrices</div>
-                <div class="axis-box">
-                    <div class="axis-row">
-                        <div class="ax ax-x">X</div>
-                        <div class="axis-desc">Downwind Axis</div>
-                        <div class="axis-val" id="axX">&mdash;</div>
+            <!-- TAB 3: GAUSSIAN MATRICES & AIR QUALITY -->
+            <div class="sb-pane" id="sbPaneAnalytics">
+                <div class="sb-sec">
+                    <div class="sb-t">Gaussian 3D System Matrices</div>
+                    <div class="axis-box">
+                        <div class="axis-row">
+                            <div class="ax ax-x">X</div>
+                            <div class="axis-desc">Downwind Axis</div>
+                            <div class="axis-val" id="axX">&mdash;</div>
+                        </div>
+                        <div class="axis-row">
+                            <div class="ax ax-y">Y</div>
+                            <div class="axis-desc">Crosswind Drift</div>
+                            <div class="axis-val" id="axY">&mdash;</div>
+                        </div>
+                        <div class="axis-row">
+                            <div class="ax ax-z">Z</div>
+                            <div class="axis-desc">Vertical Gradient</div>
+                            <div class="axis-val" id="axZ">&mdash;</div>
+                        </div>
+                        <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:.64rem;color:var(--dim);font-family:'JetBrains Mono',monospace;line-height:1.4;">
+                            C(x,y,z) = Q/(2πσyσz·U) · exp(-y²/2σy²) · [exp(-(z-H)²/2σz²) + exp(-(z+H)²/2σz²)]
+                        </div>
                     </div>
-                    <div class="axis-row">
-                        <div class="ax ax-y">Y</div>
-                        <div class="axis-desc">Crosswind Drift</div>
-                        <div class="axis-val" id="axY">&mdash;</div>
-                    </div>
-                    <div class="axis-row">
-                        <div class="ax ax-z">Z</div>
-                        <div class="axis-desc">Vertical Gradient</div>
-                        <div class="axis-val" id="axZ">&mdash;</div>
-                    </div>
-                    <div
-                        style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:.65rem;color:var(--dim);font-family:'JetBrains Mono', monospace;line-height:1.4;">
-                        C(x,y,z) = Q/(2πσyσz·U) · exp(-y²/2σy²) · [exp(-(z-H)²/2σz²) + exp(-(z+H)²/2σz²)]
+                    <div class="metric-grid-2" style="margin-top:10px">
+                        <div class="metric-box">
+                            <span class="ml">σy Lateral</span>
+                            <span class="mv rv-a" id="sSy">&mdash;</span>
+                        </div>
+                        <div class="metric-box">
+                            <span class="ml">σz Vertical</span>
+                            <span class="mv rv-a" id="sSz">&mdash;</span>
+                        </div>
+                        <div class="metric-box">
+                            <span class="ml">Core Height (H)</span>
+                            <span class="mv rv-a" id="sH">&mdash;</span>
+                        </div>
+                        <div class="metric-box">
+                            <span class="ml">Peak Distance</span>
+                            <span class="mv rv-o" id="sDist">&mdash;</span>
+                        </div>
                     </div>
                 </div>
-                <div class="card" style="margin-top:10px">
-                    <div class="row"><span>σy Lateral Dispersion</span><span class="rv rv-a" id="sSy">&mdash;</span>
-                    </div>
-                    <div class="row"><span>σz Vertical Dispersion</span><span class="rv rv-a" id="sSz">&mdash;</span>
-                    </div>
-                    <div class="row"><span>Effective Core Height (H)</span><span class="rv rv-a" id="sH">&mdash;</span>
-                    </div>
-                    <div class="row"><span>Peak Density Distance</span><span class="rv rv-o" id="sDist">&mdash;</span>
-                    </div>
-                </div>
-            </div>
 
-            <div class="sb-sec">
-                <div class="sb-t">Local Ambient Air Index</div>
-                <div class="card">
-                    <div class="row"><span>Particulate PM2.5</span><span class="rv rv-g" id="aqPm25">&mdash;</span>
+                <div class="sb-sec" style="border-bottom:none">
+                    <div class="sb-t">Local Ambient Air Index</div>
+                    <div class="metric-grid-2">
+                        <div class="metric-box">
+                            <span class="ml">PM2.5</span>
+                            <span class="mv rv-g" id="aqPm25">&mdash;</span>
+                        </div>
+                        <div class="metric-box">
+                            <span class="ml">PM10</span>
+                            <span class="mv rv-g" id="aqPm10">&mdash;</span>
+                        </div>
+                        <div class="metric-box">
+                            <span class="ml">NO₂</span>
+                            <span class="mv rv-g" id="aqNo2">&mdash;</span>
+                        </div>
+                        <div class="metric-box">
+                            <span class="ml">European AQI</span>
+                            <span class="mv" id="aqAqi">&mdash;</span>
+                        </div>
                     </div>
-                    <div class="row"><span>Particulate PM10</span><span class="rv rv-g" id="aqPm10">&mdash;</span></div>
-                    <div class="row"><span>Nitrogen Dioxide NO₂</span><span class="rv rv-g" id="aqNo2">&mdash;</span>
-                    </div>
-                    <div class="row"><span>European AQI Standard</span><span class="rv" id="aqAqi">&mdash;</span></div>
-                </div>
-            </div>
-
-            <div class="sb-sec">
-                <div class="sb-t">Sensory Node / MQ-8 Core Data</div>
-                <div class="card" style="border-color:rgba(16, 185, 129, 0.4);background: rgba(16, 185, 129, 0.02);">
-                    <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">
-                        <span style="font-size:.7rem;color:var(--dim);font-family:'JetBrains Mono';">R₀(kΩ)</span>
-                        <input id="mq8Ro" class="coord-input" style="padding:4px 8px; text-align:center" value="10"
-                            type="number" step="0.1">
-                        <span style="font-size:.7rem;color:var(--dim);font-family:'JetBrains Mono';">R_L(kΩ)</span>
-                        <input id="mq8RL" class="coord-input" style="padding:4px 8px; text-align:center" value="10"
-                            type="number" step="0.1">
-                    </div>
-                    <button class="btn"
-                        style="width:100%;justify-content: center;background: var(--accent);color:#fff;border-color:var(--accent)"
-                        onclick="fetchSheetData()">Request Core Bus Sync</button>
-                    <div id="sheetStatus"
-                        style="font-size:.7rem;color:var(--dim);margin-top:8px;text-align:center;font-weight: 500;">Node
-                        unbound</div>
-                </div>
-                <div class="card">
-                    <div class="row"><span>Raw Quantized ADC</span><span class="rv rv-a" id="mq8ADC">---</span></div>
-                    <div class="row"><span>Calculated Bus EMF</span><span class="rv rv-a" id="mq8Volt">---</span></div>
-                    <div class="row"><span>Resistance Ratio Rs/Ro</span><span class="rv rv-o" id="mq8RsRo">---</span>
-                    </div>
-                    <div class="row"><span>H₂ PPM Quantization</span><span class="rv rv-g" id="mq8PPM">---</span></div>
-                </div>
-            </div>
-
-            <div class="sb-sec">
-                <div class="sb-t">Plume Dispersion Boundary Coefficients</div>
-                <div class="ctrl" style="display:none;">
-                    <label>Mass Emission Rate Q (kg/s) <em id="lQ">0.0005</em></label>
-                    <input type="range" id="Q" min="0.00001" max="0.05" step="0.00001" value="0.0005">
-                </div>
-                <div class="ctrl">
-                    <label>Maximum Boundary Range (m) <em id="lRange">1000</em></label>
-                    <input type="range" id="maxRange" min="100" max="5000" step="50" value="1000">
-                </div>
-                <div class="ctrl">
-                    <label>Virtual Plume Elevation H (m) <em id="lH">30</em></label>
-                    <input type="range" id="Heff" min="0" max="100" step="0.5" value="30">
-                </div>
-                <div class="ctrl">
-                    <label>Pasquill Stability Class <em id="lsc">Near Neutral</em></label>
-                    <select id="stability">
-                        <option value="A">A — Extreme Thermal Instability</option>
-                        <option value="B">B — Moderate Instability</option>
-                        <option value="C">C — Minor Instability</option>
-                        <option value="D" selected>D — Neutral Matrix Standard</option>
-                        <option value="E">E — Moderate Micro-Stability</option>
-                        <option value="F">F — Extreme Stability Stratum</option>
-                    </select>
-                </div>
-                <div class="ctrl">
-                    <label>Cross-Section Z Plane (m) <em id="lZslice">0</em></label>
-                    <input type="range" id="Zslice" min="0" max="80" step="1" value="0">
-                </div>
-                <div class="ctrl">
-                    <label>Canvas Overlay Opacity <em id="lopac">0.80</em></label>
-                    <input type="range" id="opacity" min="0.1" max="1" step="0.05" value="0.80">
-                </div>
-            </div>
-
-            <div class="sb-sec">
-                <div class="sb-t">Mass Concentration Density Scale (µg/m³)</div>
-                <div class="scale-bar"></div>
-                <div class="scale-ticks">
-                    <span>0</span><span id="scT1">&mdash;</span><span id="scT2">&mdash;</span>
-                    <span id="scT3">&mdash;</span><span id="scMax">&mdash;</span>
                 </div>
             </div>
 
@@ -1555,41 +1712,46 @@
             <div id="map"></div>
             <canvas id="plumeCanvas"></canvas>
 
+            <!-- Compact Horizontal Wind Compass Pill (Top-Left) -->
             <div class="hud" id="hudW">
-                <canvas id="compass" width="54" height="54"
-                    style="display:block;margin-bottom:6px;filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15));"></canvas>
-                <div id="hudWT" style="color:var(--orange);font-family:'JetBrains Mono',monospace;font-weight:700">
-                    Vector Status: Scan pending</div>
-            </div>
-
-            <div class="hud" id="hudS">
-                <div id="hudST"
-                    style="color:var(--yellow);font-family:'Orbitron',sans-serif;font-weight:800;font-size:0.85rem;letter-spacing:0.05em">
-                    SYSTEM BOOT</div>
-                <div id="hudTime" style="color:var(--dim);font-size:.68rem;margin-top:2px;font-family:'JetBrains Mono'">
+                <canvas id="compass" width="44" height="44" style="display:block;flex-shrink:0;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.15));"></canvas>
+                <div>
+                    <div style="font-size:0.64rem;color:var(--dim);text-transform:uppercase;letter-spacing:0.06em;font-weight:700;">Wind Vector Flow</div>
+                    <div id="hudWT" style="color:var(--orange);font-family:'JetBrains Mono',monospace;font-weight:700;font-size:0.76rem;">Scan pending</div>
                 </div>
             </div>
 
-            <div class="hud" id="hudMapSwitch" title="Switch Map Layer (100% Free, No API Key Required)">
-                <button type="button" class="map-mode-btn active" id="bmDark" onclick="setBasemap('dark')">🌑 Dark</button>
-                <button type="button" class="map-mode-btn" id="bmOsm" onclick="setBasemap('osm')">🗺️ OSM</button>
-                <button type="button" class="map-mode-btn" id="bmSat" onclick="setBasemap('satellite')">🛰️ Satellite</button>
+            <!-- Unified Top-Right Status + Basemap + Plume Overlay Bar -->
+            <div class="hud" id="hudTopRight">
+                <div class="hud-status-group">
+                    <span class="status-dot"></span>
+                    <div>
+                        <div id="hudST" style="color:var(--green);font-family:'Orbitron',sans-serif;font-weight:800;font-size:0.74rem;letter-spacing:0.05em;line-height:1.1;">ONLINE</div>
+                        <div id="hudTime" style="color:var(--dim);font-size:0.62rem;font-family:'JetBrains Mono';line-height:1.1;margin-top:2px;"></div>
+                    </div>
+                </div>
+                <div class="hud-btn-group" title="Switch Map Layer (100% Free, No API Key Required)">
+                    <button type="button" class="map-mode-btn active" id="bmDark" onclick="setBasemap('dark')">🌑 Dark</button>
+                    <button type="button" class="map-mode-btn" id="bmOsm" onclick="setBasemap('osm')">🗺️ OSM</button>
+                    <button type="button" class="map-mode-btn" id="bmSat" onclick="setBasemap('satellite')">🛰️ Satellite</button>
+                </div>
+                <div class="hud-divider"></div>
+                <div class="hud-btn-group" title="Toggle Scientific Plume Overlays">
+                    <button type="button" class="map-mode-btn overlay-btn active" id="btnToggleRings" onclick="togglePlumeOverlay('rings')">◎ Rings</button>
+                    <button type="button" class="map-mode-btn overlay-btn active" id="btnToggleContours" onclick="togglePlumeOverlay('contours')">〰 Contours</button>
+                </div>
             </div>
 
+            <!-- Unified Bottom-Left Floating Density Scale Legend + Cursor Readout -->
             <div class="hud" id="hudC">
-                <span id="coordTxt" style="color:var(--text-heading);font-weight:500">Awaiting radar lock
-                    positioning</span>
-            </div>
-
-            <div class="hud" id="hudDrone">
-                <div
-                    style="color:var(--drone);margin-bottom:4px;font-family:'Orbitron',sans-serif;font-weight:800;letter-spacing:0.02em">
-                    ◆ TARGET DETECTOR DRONE</div>
-                <div id="dronePos" style="font-size:.75rem;font-family:'JetBrains Mono';font-weight:500;">23.09422°N
-                    90.01574°E</div>
-                <div id="droneAlt"
-                    style="font-size:.75rem;color:var(--accent);font-family:'JetBrains Mono';font-weight:700;margin-top:2px;">
-                    ALT STACK: 30.00m AGL</div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                    <span style="font-size:0.64rem;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:0.05em;">Plume Density (µg/m³)</span>
+                    <span id="coordTxt" style="color:var(--text-heading);font-weight:600;font-size:0.7rem;font-family:'JetBrains Mono',monospace;">Hover map</span>
+                </div>
+                <div class="scale-bar" style="height:10px;margin:4px 0;"></div>
+                <div class="scale-ticks" style="font-size:0.64rem;">
+                    <span>0</span><span id="scT1">&mdash;</span><span id="scT2">&mdash;</span><span id="scT3">&mdash;</span><span id="scMax">&mdash;</span>
+                </div>
             </div>
 
             <div id="tooltip"></div>
@@ -1600,25 +1762,33 @@
                     <div class="spinner-inner"></div>
                 </div>
                 <p>INITIALIZING APEX RADAR STREAM</p>
-                <small
-                    style="color:var(--dim);font-size:.7rem;font-family:'JetBrains Mono';letter-spacing:0.02em">ISOTOPER
-                    PLATFORM v2.6 · MQ-8 CALIBRATION COMPLIANT</small>
+                <small style="color:var(--dim);font-size:.7rem;font-family:'JetBrains Mono';letter-spacing:0.02em">ISOTOPER PLATFORM v2.6 · MQ-8 CALIBRATION COMPLIANT</small>
                 <div id="loaderLog">Accessing core memory registers&hellip;</div>
             </div>
         </div>
     </div>
 
     <div id="statsBar">
-        <div class="stat"><span class="sl">Peak Cloud Concentration</span><span class="sv" id="sPeak">&mdash;</span>
+        <div class="stat" style="border-left:3px solid var(--drone);">
+            <span class="sl">Peak Cloud Density</span>
+            <span class="sv" id="sPeak" style="color:var(--drone)">&mdash;</span>
         </div>
-        <div class="stat"><span class="sl">Max Peak Vector Downwind</span><span class="sv" id="stX">&mdash;</span></div>
-        <div class="stat"><span class="sl">Crosswind Vector Deviation</span><span class="sv" id="stY">&mdash;</span>
+        <div class="stat" style="border-left:3px solid var(--orange);">
+            <span class="sl">Peak Downwind / Drift</span>
+            <span class="sv"><span id="stX">&mdash;</span> <small style="color:var(--dim);font-size:0.75rem;">(y: <span id="stY">&mdash;</span>)</small></span>
         </div>
-        <div class="stat"><span class="sl">Vertical Capture Plane</span><span class="sv" id="stZ">&mdash;</span></div>
-        <div class="stat"><span class="sl">H Stack Target Baseline</span><span class="sv" id="stH">&mdash;</span></div>
-        <div class="stat"><span class="sl">Stream Velocity</span><span class="sv" id="sWind">&mdash;</span></div>
-        <div class="stat"><span class="sl">True Angle Flow</span><span class="sv" id="sWindDir">&mdash;</span></div>
-        <div class="stat"><span class="sl">Bus Datetime Cycle</span><span class="sv" id="sTime">&mdash;</span></div>
+        <div class="stat" style="border-left:3px solid var(--accent);">
+            <span class="sl">Z-Plane / Core Height H</span>
+            <span class="sv"><span id="stZ">&mdash;</span> <small style="color:var(--dim);font-size:0.75rem;">/ H: <span id="stH">&mdash;</span></small></span>
+        </div>
+        <div class="stat" style="border-left:3px solid var(--green);">
+            <span class="sl">Wind Stream Vector</span>
+            <span class="sv"><span id="sWind">&mdash;</span> <small style="color:var(--dim);font-size:0.75rem;" id="sWindDir">&mdash;</small></span>
+        </div>
+        <div class="stat">
+            <span class="sl">Last Telemetry Sync</span>
+            <span class="sv" id="sTime">&mdash;</span>
+        </div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -1679,6 +1849,29 @@
         }).addTo(map);
 
         let currentBasemap = 'dark';
+        let showRings = true;
+        let showContours = true;
+
+        function switchSidebarTab(tab) {
+            document.getElementById('sbTabBtnSource').classList.toggle('active', tab === 'source');
+            document.getElementById('sbTabBtnControls').classList.toggle('active', tab === 'controls');
+            document.getElementById('sbTabBtnAnalytics').classList.toggle('active', tab === 'analytics');
+
+            document.getElementById('sbPaneSource').classList.toggle('active', tab === 'source');
+            document.getElementById('sbPaneControls').classList.toggle('active', tab === 'controls');
+            document.getElementById('sbPaneAnalytics').classList.toggle('active', tab === 'analytics');
+        }
+
+        function togglePlumeOverlay(type) {
+            if (type === 'rings') {
+                showRings = !showRings;
+                document.getElementById('btnToggleRings').classList.toggle('active', showRings);
+            } else if (type === 'contours') {
+                showContours = !showContours;
+                document.getElementById('btnToggleContours').classList.toggle('active', showContours);
+            }
+            recomputePlume();
+        }
 
         function setBasemap(mode, fromThemeToggle = false) {
             currentBasemap = mode;
@@ -2000,16 +2193,17 @@
                 '<span>AQI: <span class="wv" style="color:' + aqiC(AQ.aqi) + '">' + (AQ.aqi || '—') + '</span></span>';
 
             document.getElementById('sWind').textContent = U.toFixed(2) + ' m/s';
-            document.getElementById('sWindDir').textContent = WD + '° FROM ' + dirN(WD);
+            document.getElementById('sWindDir').textContent = '· ' + WD + '° ' + dirN(WD);
             drawCompass(WD);
-            document.getElementById('hudWT').textContent = 'Vector Flow: ' + U.toFixed(1) + ' m/s FROM ' + dirN(WD) + ' (' + WD + '°)';
+            document.getElementById('hudWT').textContent = U.toFixed(1) + ' m/s FROM ' + dirN(WD) + ' (' + WD + '°)';
         }
 
         function drawCompass(wd) {
             const cv = document.getElementById('compass');
             const ctx = cv.getContext('2d');
-            ctx.clearRect(0, 0, 54, 54);
-            const cx = 27, cy = 27, r = 21;
+            const Wc = cv.width || 44, Hc = cv.height || 44;
+            ctx.clearRect(0, 0, Wc, Hc);
+            const cx = Wc / 2, cy = Hc / 2, r = Math.min(cx, cy) - 4;
 
             const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
 
@@ -2018,16 +2212,16 @@
 
             for (let i = 0; i < 8; i++) {
                 const a = i * Math.PI / 4;
-                ctx.strokeStyle = isDark ? '#6B7280' : '#6B7280'; ctx.lineWidth = 1; ctx.beginPath();
-                ctx.moveTo(cx + Math.sin(a) * (r - 4), cy - Math.cos(a) * (r - 4));
+                ctx.strokeStyle = '#6B7280'; ctx.lineWidth = 1; ctx.beginPath();
+                ctx.moveTo(cx + Math.sin(a) * (r - 3.5), cy - Math.cos(a) * (r - 3.5));
                 ctx.lineTo(cx + Math.sin(a) * r, cy - Math.cos(a) * r); ctx.stroke();
             }
-            ctx.fillStyle = isDark ? '#9CA3AF' : '#374151'; ctx.font = '7px "JetBrains Mono"'; ctx.textAlign = 'center';
-            ctx.fillText('N', cx, cy - r + 8); ctx.fillText('S', cx, cy + r - 1);
+            ctx.fillStyle = isDark ? '#9CA3AF' : '#374151'; ctx.font = '6.5px "JetBrains Mono"'; ctx.textAlign = 'center';
+            ctx.fillText('N', cx, cy - r + 7); ctx.fillText('S', cx, cy + r - 1.5);
 
-            const fr = wd * Math.PI / 180, a = 15;
+            const fr = wd * Math.PI / 180, a = r - 6;
 
-            ctx.strokeStyle = '#ea580c'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+            ctx.strokeStyle = '#ea580c'; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
             ctx.beginPath();
             ctx.moveTo(cx - Math.sin(fr) * a, cy - Math.cos(fr) * a);
             ctx.lineTo(cx + Math.sin(fr) * a, cy + Math.cos(fr) * a);
@@ -2035,9 +2229,9 @@
 
             const tx = cx + Math.sin(fr) * a, ty = cy + Math.cos(fr) * a;
             ctx.fillStyle = '#ea580c';
-            ctx.beginPath(); ctx.arc(tx, ty, 3.5, 0, 2 * Math.PI); ctx.fill();
-            ctx.fillStyle = 'rgba(255,255,255,0.2)';
-            ctx.beginPath(); ctx.arc(cx, cy, 2, 0, 2 * Math.PI); ctx.fill();
+            ctx.beginPath(); ctx.arc(tx, ty, 3, 0, 2 * Math.PI); ctx.fill();
+            ctx.fillStyle = 'rgba(255,255,255,0.25)';
+            ctx.beginPath(); ctx.arc(cx, cy, 1.8, 0, 2 * Math.PI); ctx.fill();
         }
 
         function getSigmas(x, stab) {
@@ -2132,16 +2326,46 @@
             const imgData = new ImageData(NW, NH);
             const logMax = Math.log10(Math.max(maxC, 1e-3));
             const logMin = logMax - 5;
+            const normField = new Float32Array(NW * NH);
 
             for (let i = 0; i < NW * NH; i++) {
                 const c = grid[i];
                 if (c < 1e-10) { imgData.data[i * 4 + 3] = 0; continue; }
                 const t = Math.max(0, Math.min(1, (Math.log10(c) - logMin) / (logMax - logMin)));
+                normField[i] = t;
                 const [r, g, b] = heatColor(t);
                 imgData.data[i * 4] = r;
                 imgData.data[i * 4 + 1] = g;
                 imgData.data[i * 4 + 2] = b;
                 imgData.data[i * 4 + 3] = Math.round(t * 255 * opac);
+            }
+
+            // Iso-Concentration Contour Boundaries (Outer 35%, Mid 62%, Core 85%)
+            if (showContours && maxC > 1e-10) {
+                const levels = [
+                    { th: 0.35, rgb: [56, 189, 248] },
+                    { th: 0.62, rgb: [250, 204, 21] },
+                    { th: 0.85, rgb: [255, 255, 255] }
+                ];
+                for (let py = 1; py < NH - 1; py++) {
+                    for (let px = 1; px < NW - 1; px++) {
+                        const idx = py * NW + px;
+                        const v = normField[idx];
+                        if (v <= 0.05) continue;
+                        const vr = normField[idx + 1];
+                        const vb = normField[idx + NW];
+                        for (let k = 0; k < levels.length; k++) {
+                            const lv = levels[k].th;
+                            if ((v >= lv && (vr < lv || vb < lv)) || (v < lv && (vr >= lv || vb >= lv))) {
+                                imgData.data[idx * 4] = levels[k].rgb[0];
+                                imgData.data[idx * 4 + 1] = levels[k].rgb[1];
+                                imgData.data[idx * 4 + 2] = levels[k].rgb[2];
+                                imgData.data[idx * 4 + 3] = 240;
+                                break;
+                            }
+                        }
+                    }
+                }
             }
 
             const off = new OffscreenCanvas(NW, NH);
@@ -2150,6 +2374,67 @@
             ctx.clearRect(0, 0, CW, CH);
             ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
             ctx.drawImage(off, 0, 0, CW, CH);
+
+            // Scientific Range Rings + Downwind Plume Vector Axis + Peak Crosshair
+            if (showRings) {
+                const isDark = document.documentElement.getAttribute('data-theme') === 'dark' || currentBasemap !== 'osm';
+                const ringSteps = [0.25, 0.5, 0.75, 1.0];
+                ctx.save();
+                ctx.font = '600 10px "JetBrains Mono", monospace';
+                ctx.textAlign = 'center';
+
+                ringSteps.forEach((frac, idx) => {
+                    const rMeters = Math.round(maxRangeM * frac);
+                    const rPx = rMeters / mpp;
+                    if (rPx < 18 || rPx > Math.max(CW, CH) * 1.4) return;
+
+                    ctx.beginPath();
+                    ctx.setLineDash(idx === 3 ? [6, 4] : [3, 5]);
+                    ctx.lineWidth = idx === 3 ? 1.4 : 1.0;
+                    ctx.strokeStyle = isDark ? 'rgba(148, 163, 184, 0.35)' : 'rgba(51, 65, 85, 0.32)';
+                    ctx.arc(srcPt.x, srcPt.y, rPx, 0, 2 * Math.PI);
+                    ctx.stroke();
+
+                    // Distance label along downwind ray or top of ring
+                    const lx = srcPt.x + wUx * rPx;
+                    const ly = srcPt.y + wUy * rPx;
+                    if (lx > 25 && lx < CW - 25 && ly > 20 && ly < CH - 20) {
+                        const lbl = rMeters >= 1000 ? (rMeters / 1000).toFixed(rMeters % 1000 === 0 ? 0 : 2) + 'km' : rMeters + 'm';
+                        ctx.fillStyle = isDark ? 'rgba(15, 23, 42, 0.78)' : 'rgba(255, 255, 255, 0.85)';
+                        ctx.fillRect(lx - 18, ly - 7, 36, 14);
+                        ctx.fillStyle = isDark ? '#38BDF8' : '#2563EB';
+                        ctx.fillText(lbl, lx, ly + 3.5);
+                    }
+                });
+
+                // Downwind Centerline Vector Axis
+                const endPxX = srcPt.x + wUx * (maxRangeM / mpp);
+                const endPxY = srcPt.y + wUy * (maxRangeM / mpp);
+                ctx.beginPath();
+                ctx.setLineDash([5, 4]);
+                ctx.lineWidth = 1.4;
+                ctx.strokeStyle = isDark ? 'rgba(251, 146, 60, 0.65)' : 'rgba(234, 88, 12, 0.7)';
+                ctx.moveTo(srcPt.x, srcPt.y);
+                ctx.lineTo(endPxX, endPxY);
+                ctx.stroke();
+
+                // Peak Concentration Crosshair Marker on Centerline
+                if (peakX > 0 && maxC > 1e-10) {
+                    const pkScreenX = srcPt.x + wUx * (peakX / mpp);
+                    const pkScreenY = srcPt.y + wUy * (peakX / mpp);
+                    ctx.setLineDash([]);
+                    ctx.strokeStyle = '#FFFFFF';
+                    ctx.lineWidth = 1.6;
+                    ctx.beginPath();
+                    ctx.arc(pkScreenX, pkScreenY, 5, 0, 2 * Math.PI);
+                    ctx.stroke();
+                    ctx.fillStyle = '#E11D48';
+                    ctx.beginPath();
+                    ctx.arc(pkScreenX, pkScreenY, 2.5, 0, 2 * Math.PI);
+                    ctx.fill();
+                }
+                ctx.restore();
+            }
 
             const stP = PG[stab] || PG.D;
             const xMax = H > 0 ? Math.pow(H / (Math.sqrt(2) * stP.az), 1 / stP.bz) : 200;
