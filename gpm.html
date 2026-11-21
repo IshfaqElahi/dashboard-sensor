@@ -1008,6 +1008,54 @@
             border-right: 3px solid var(--accent);
         }
 
+        /* BASEMAP SWITCHER HUD (Dark Tactical / OSM Standard / Satellite) */
+        #hudMapSwitch {
+            top: 86px;
+            right: 16px;
+            padding: 6px;
+            pointer-events: auto;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            border-radius: var(--radius-md);
+            z-index: 25;
+        }
+
+        .map-mode-btn {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            font-weight: 700;
+            padding: 6px 11px;
+            border-radius: 6px;
+            border: 1px solid transparent;
+            background: transparent;
+            color: var(--dim);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            white-space: nowrap;
+        }
+
+        .map-mode-btn:hover {
+            color: var(--text-heading);
+            background: rgba(148, 163, 184, 0.12);
+        }
+
+        .map-mode-btn.active {
+            background: var(--accent);
+            color: #ffffff;
+            border-color: var(--accent);
+            box-shadow: 0 2px 10px var(--accent-glow);
+        }
+
+        /* API-Key-Free Dark Tactical Filter on Official OpenStreetMap Tiles */
+        #map[data-basemap="dark"] .osm-base-layer {
+            filter: invert(100%) hue-rotate(180deg) brightness(92%) contrast(92%) saturate(85%);
+            -webkit-filter: invert(100%) hue-rotate(180deg) brightness(92%) contrast(92%) saturate(85%);
+        }
+
         #hudC {
             bottom: 16px;
             left: 16px;
@@ -1271,6 +1319,17 @@
                 top: 10px;
             }
 
+            #hudMapSwitch {
+                right: 10px;
+                top: 72px;
+                padding: 4px;
+            }
+
+            .map-mode-btn {
+                padding: 5px 8px;
+                font-size: 0.66rem;
+            }
+
             #hudW {
                 left: 10px;
                 top: 10px;
@@ -1511,6 +1570,12 @@
                 </div>
             </div>
 
+            <div class="hud" id="hudMapSwitch" title="Switch Map Layer (100% Free, No API Key Required)">
+                <button type="button" class="map-mode-btn active" id="bmDark" onclick="setBasemap('dark')">🌑 Dark</button>
+                <button type="button" class="map-mode-btn" id="bmOsm" onclick="setBasemap('osm')">🗺️ OSM</button>
+                <button type="button" class="map-mode-btn" id="bmSat" onclick="setBasemap('satellite')">🛰️ Satellite</button>
+            </div>
+
             <div class="hud" id="hudC">
                 <span id="coordTxt" style="color:var(--text-heading);font-weight:500">Awaiting radar lock
                     positioning</span>
@@ -1594,13 +1659,57 @@
             center: [SRC.lat, SRC.lon], zoom: 14,
             zoomControl: false, attributionControl: false
         });
+        document.getElementById('map').setAttribute('data-basemap', 'dark');
 
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-            { subdomains: 'abcd', maxZoom: 19 }).addTo(map);
-        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-            { maxZoom: 19, opacity: 0.15 }).addTo(map);
+        // 100% Free, API-Key-Free Tile Layers (OpenStreetMap + Esri World Imagery + Esri Reference Labels)
+        const osmTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            subdomains: 'abc',
+            maxZoom: 19,
+            className: 'osm-base-layer'
+        }).addTo(map);
+
+        const esriSatLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 19,
+            opacity: 0.15
+        }).addTo(map);
+
+        const esriLabelsLayer = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 19,
+            opacity: 0
+        }).addTo(map);
+
+        let currentBasemap = 'dark';
+
+        function setBasemap(mode, fromThemeToggle = false) {
+            currentBasemap = mode;
+            const mapEl = document.getElementById('map');
+            mapEl.setAttribute('data-basemap', mode);
+
+            document.getElementById('bmDark').classList.toggle('active', mode === 'dark');
+            document.getElementById('bmOsm').classList.toggle('active', mode === 'osm');
+            document.getElementById('bmSat').classList.toggle('active', mode === 'satellite');
+
+            if (mode === 'dark') {
+                osmTileLayer.setOpacity(1.0);
+                esriSatLayer.setOpacity(0.15);
+                esriLabelsLayer.setOpacity(0);
+            } else if (mode === 'osm') {
+                osmTileLayer.setOpacity(1.0);
+                esriSatLayer.setOpacity(0);
+                esriLabelsLayer.setOpacity(0);
+            } else if (mode === 'satellite') {
+                osmTileLayer.setOpacity(0);
+                esriSatLayer.setOpacity(1.0);
+                esriLabelsLayer.setOpacity(0.92);
+            }
+
+            if (!fromThemeToggle) {
+                localStorage.setItem('gpm_basemap', mode);
+            }
+        }
+
         L.control.zoom({ position: 'bottomright' }).addTo(map);
-        L.control.attribution({ position: 'bottomright', prefix: 'CartoDB/Esri/Open-Meteo' }).addTo(map);
+        L.control.attribution({ position: 'bottomright', prefix: 'OpenStreetMap/Esri/Open-Meteo' }).addTo(map);
 
         function makeDroneIcon() {
             return L.divIcon({
@@ -2127,10 +2236,12 @@
                 btn.innerHTML = '☀️ Light Mode';
                 btn.style.borderColor = 'var(--border)';
                 btn.style.color = 'var(--text-heading)';
+                if (currentBasemap === 'osm') setBasemap('dark', true);
             } else {
                 btn.innerHTML = '🌙 Dark Mode';
                 btn.style.borderColor = 'var(--accent)';
                 btn.style.color = 'var(--accent)';
+                if (currentBasemap === 'dark') setBasemap('osm', true);
             }
             localStorage.setItem('theme', currentTheme);
             if (typeof W !== 'undefined' && W.WD !== undefined) drawCompass(W.WD);
@@ -2141,6 +2252,10 @@
             if (savedTheme === 'light') {
                 currentTheme = 'dark'; // Trick it so the toggle triggers correctly
                 toggleTheme();
+            }
+            const savedBasemap = localStorage.getItem('gpm_basemap');
+            if (savedBasemap && ['dark', 'osm', 'satellite'].includes(savedBasemap)) {
+                setBasemap(savedBasemap, true);
             }
         }
 
