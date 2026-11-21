@@ -1538,11 +1538,11 @@
                         <div class="coord-grid-3">
                             <div class="coord-field">
                                 <label>LAT (°N)</label>
-                                <input class="coord-input" id="inLat" type="number" step="0.0001" value="23.0942" placeholder="Lat">
+                                <input class="coord-input" id="inLat" type="number" step="0.0001" value="23.8381" placeholder="Lat">
                             </div>
                             <div class="coord-field">
                                 <label>LON (°E)</label>
-                                <input class="coord-input" id="inLon" type="number" step="0.0001" value="90.0157" placeholder="Lon">
+                                <input class="coord-input" id="inLon" type="number" step="0.0001" value="90.3575" placeholder="Lon">
                             </div>
                             <div class="coord-field">
                                 <label>ALT (m)</label>
@@ -1556,10 +1556,10 @@
                         <div id="pickMsg" style="display:none;font-size:.7rem;color:var(--yellow);margin-top:8px;text-align:center;font-weight:500;">
                             Click anywhere on map canvas to lock source origin</div>
                         <div class="locked-inline-bar">
-                            <span>Locked: <strong id="srcLatDisp" style="color:var(--drone)">23.0942</strong>, <strong id="srcLonDisp" style="color:var(--drone)">90.0157</strong></span>
+                            <span>Locked: <strong id="srcLatDisp" style="color:var(--drone)">23.838100</strong>, <strong id="srcLonDisp" style="color:var(--drone)">90.357500</strong></span>
                             <span>z = <strong id="srcAltDisp" style="color:var(--accent)">30 m</strong></span>
                         </div>
-                        <span id="dronePos" style="display:none">23.09422°N 90.01574°E</span>
+                        <span id="dronePos" style="display:none">23.83810°N 90.35750°E</span>
                     </div>
                 </div>
 
@@ -1834,12 +1834,12 @@
         // =========================================================================
 
         const PG = {
-            A: { ay: 0.22, by: 0.9, az: 0.20, bz: 0.9 },
-            B: { ay: 0.16, by: 0.9, az: 0.12, bz: 0.9 },
-            C: { ay: 0.11, by: 0.9, az: 0.08, bz: 0.9 },
-            D: { ay: 0.08, by: 0.9, az: 0.06, bz: 0.9 },
-            E: { ay: 0.06, by: 0.9, az: 0.03, bz: 0.9 },
-            F: { ay: 0.04, by: 0.9, az: 0.016, bz: 0.9 },
+            A: { ay: 0.22, by: 0.9, az: 0.20, bz: 0.9, p: 0.07 },
+            B: { ay: 0.16, by: 0.9, az: 0.12, bz: 0.9, p: 0.07 },
+            C: { ay: 0.11, by: 0.9, az: 0.08, bz: 0.9, p: 0.10 },
+            D: { ay: 0.08, by: 0.9, az: 0.06, bz: 0.9, p: 0.15 },
+            E: { ay: 0.06, by: 0.9, az: 0.03, bz: 0.9, p: 0.35 },
+            F: { ay: 0.04, by: 0.9, az: 0.016, bz: 0.9, p: 0.55 },
         };
 
         const WMO = {
@@ -1849,10 +1849,19 @@
         const DIR_NAMES = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
         const PPM_TO_UGM3_H2 = 82.4;
 
-        let SRC = { lat: 23.0942, lon: 90.0157, alt: 30 };
+        // Hardware Circuit Constants from ISOTOPER B15 Air Unit Schematic (J3 MQ-8 + R2=33k/R3=47k divider)
+        const MQ8_VC = 5.2;
+        const MQ8_DIVIDER_GAIN = (33.0 + 47.0) / 47.0; // V_RL = V_ADC * (80 / 47)
+
+        // Default Source Origin: MIST Campus, Mirpur Cantonment, Dhaka
+        const DEFAULT_SRC = { lat: 23.8381, lon: 90.3575, alt: 30 };
+        let SRC = { ...DEFAULT_SRC };
         let W = { U: 2.6, WD: 315, temp: 28, hum: 28, code: 0 };
         let AQ = {};
         let windMode = 'live';
+        let manualStabilityOverride = false;
+        let lastSyncedADC = null;
+        let lastSyncedC_ug_m3 = null;
         let plumeCache = null;
         let droneMarker = null;
         let pickingMode = false;
@@ -1996,7 +2005,7 @@
         }
 
         function resetDroneToDefault() {
-            SRC = { lat: 23.0942, lon: 90.0157, alt: 30 };
+            SRC = { ...DEFAULT_SRC };
             document.getElementById('inLat').value = SRC.lat;
             document.getElementById('inLon').value = SRC.lon;
             document.getElementById('inAlt').value = SRC.alt;
@@ -2026,6 +2035,8 @@
                 W.U = +document.getElementById('manWS').value;
                 W.WD = +document.getElementById('manWD').value;
                 updateUI(); recomputePlume();
+            } else {
+                fetchLiveWeather();
             }
         }
 
@@ -2048,13 +2059,67 @@
             return await response.json();
         }
 
+        // Atmospheric Boundary-Layer Wind Speed Power-Law Profile: U(H) = U10 * (H / 10)^p
+        function getWindAtHeight(U10, H, stab) {
+            const p = (PG[stab] || PG.D).p || 0.15;
+            const zEff = Math.max(H, 2.0);
+            return Math.max(0.2, U10 * Math.pow(zEff / 10.0, p));
+        }
+
+        // Turner Pasquill-Gifford Stability Classification from 10m Wind Speed, Solar Hour, and Cloud/Weather Code
+        function estimatePasquillStability(U10, weatherCode) {
+            const hour = new Date().getHours();
+            const isDay = hour >= 6 && hour < 18;
+            const isHighSun = hour >= 10 && hour <= 15;
+            const isOvercast = weatherCode >= 3;
+            if (isOvercast || U10 >= 6.0) return 'D';
+            if (isDay) {
+                if (U10 < 2.0) return isHighSun ? 'A' : 'B';
+                if (U10 < 3.0) return isHighSun ? 'B' : 'C';
+                if (U10 < 5.0) return isHighSun ? 'B' : 'C';
+                return 'C';
+            } else {
+                // Nighttime radiative cooling
+                if (U10 < 2.5) return 'F';
+                if (U10 < 3.5) return 'E';
+                return 'D';
+            }
+        }
+
+        // Hardware-compensated MQ-8 Analog Conversion (ESP32-S3 3.3V ADC + R2=33k / R3=47k Voltage Divider + Vc=5.2V)
+        function computeMQ8Metrics(adc, Ro, RL) {
+            const v_adc = Math.max(0, adc * (3.3 / 4095.0));
+            if (v_adc < 0.001) {
+                return { v_adc: 0, v_rl: 0, Rs: 0, ratio: 0, ppm: 0, C_ug_m3: 0 };
+            }
+            const v_rl = Math.min(MQ8_VC - 0.02, v_adc * MQ8_DIVIDER_GAIN);
+            const Rs = ((MQ8_VC - v_rl) / v_rl) * RL;
+            const ratio = Rs / Math.max(Ro, 0.01);
+            const ppm = Math.max(0, 987.99 * Math.pow(Math.max(ratio, 0.001), -2.162));
+            const C_ug_m3 = ppm * PPM_TO_UGM3_H2;
+            return { v_adc, v_rl, Rs, ratio, ppm, C_ug_m3 };
+        }
+
         function adcToPPM(adc, Ro, RL) {
-            var v = adc * (3.3 / 4095.0);
-            if (v < 0.001) return 0;
-            var Vc = 5.0;
-            var Rs = ((Vc - v) / v) * RL;
-            var ratio = Rs / Ro;
-            return Math.max(0, 987.99 * Math.pow(Math.max(ratio, 0.001), -2.162));
+            return computeMQ8Metrics(adc, Ro, RL).ppm;
+        }
+
+        function applyMQ8Reading(adc) {
+            if (!adc || isNaN(adc) || adc <= 0) return;
+            lastSyncedADC = adc;
+            const Ro = parseFloat(document.getElementById('mq8Ro').value) || 10;
+            const RL = parseFloat(document.getElementById('mq8RL').value) || 10;
+            const m = computeMQ8Metrics(adc, Ro, RL);
+            lastSyncedC_ug_m3 = m.C_ug_m3;
+
+            document.getElementById('mq8ADC').textContent = adc.toFixed(0);
+            document.getElementById('mq8Volt').textContent = m.v_rl.toFixed(2) + 'V (' + m.v_adc.toFixed(2) + 'V ADC)';
+            document.getElementById('mq8RsRo').textContent = m.ratio.toFixed(3);
+            document.getElementById('mq8PPM').textContent = m.ppm.toFixed(1) + ' ppm';
+            document.getElementById('sheetStatus').textContent =
+                `Bound: ${m.C_ug_m3.toFixed(1)} µg/m³ H₂ (${m.ppm.toFixed(1)} ppm)`;
+
+            updateDynamicQ(m.C_ug_m3);
         }
 
         async function fetchSheetData() {
@@ -2066,36 +2131,19 @@
                 const data = await response.json();
 
                 if (data.error) throw new Error(data.error);
-                if (!data.latest) throw new Error('Missing "latest" data object from API');
-
-                const env = data.latest;
+                const env = data.latest || data;
                 const adc = parseFloat(env.h2_raw);
-                const ws = parseFloat(env.ws || env.wind_speed || W.U);
-                const wd = parseFloat(env.wd || env.wind_direction || W.WD);
+                const ws = parseFloat(env.ws || env.wind_speed);
+                const wd = parseFloat(env.wd || env.wind_direction);
 
                 if (isNaN(adc) || adc <= 0) throw new Error('Invalid or missing h2_raw value');
-
-                const Ro = parseFloat(document.getElementById('mq8Ro').value) || 10;
-                const RL = parseFloat(document.getElementById('mq8RL').value) || 10;
-
-                const volt = adc * (3.3 / 4095.0);
-                const Rs = ((5.0 - volt) / volt) * RL;
-                const ratio = Rs / Ro;
-                const ppm = adcToPPM(adc, Ro, RL);
-                const C_ug_m3 = ppm * PPM_TO_UGM3_H2;
-
-                document.getElementById('mq8ADC').textContent = adc.toFixed(0);
-                document.getElementById('mq8Volt').textContent = volt.toFixed(3) + ' V';
-                document.getElementById('mq8RsRo').textContent = ratio.toFixed(3);
-                document.getElementById('mq8PPM').textContent = ppm.toFixed(2) + ' ppm';
-                document.getElementById('sheetStatus').textContent = `Bound: ${C_ug_m3.toFixed(2)} µg/m³ H₂`;
 
                 if (!isNaN(ws) && !isNaN(wd) && windMode === 'live') {
                     W.U = ws;
                     W.WD = wd;
                 }
 
-                updateDynamicQ(C_ug_m3);
+                applyMQ8Reading(adc);
                 updateUI();
                 recomputePlume();
 
@@ -2105,30 +2153,28 @@
             }
         }
 
+        // Physically Consistent Near-Field Inverse Source Estimation at Reference Plume Centerline (x_ref = 25m, y = 0, z = H)
         function updateDynamicQ(C_ug_m3) {
-            if (C_ug_m3 <= 0) return;
+            if (!C_ug_m3 || C_ug_m3 <= 0) return;
 
             const H = parseFloat(document.getElementById('Heff').value);
             const stab = document.getElementById('stability').value;
-            const U = Math.max(W.U, 0.2);
+            const U_H = getWindAtHeight(W.U, H, stab);
 
-            const x_measure = 1.0;
-            const y_measure = 0.0;
-            const z_measure = SRC.alt;
-
+            // Reference near-field sampling distance x_ref = 25.0 m along plume centerline (y = 0, z = H)
+            // Avoids exponential underflow exp(-(z_measure - H)^2 / 2*sz^2) -> 0 when H slider is adjusted
+            const x_measure = 25.0;
             const { sy, sz } = getSigmas(x_measure, stab);
 
-            const expY = Math.exp(-(y_measure * y_measure) / (2 * sy * sy));
-            const expZ1 = Math.exp(-((z_measure - H) * (z_measure - H)) / (2 * sz * sz));
-            const expZ2 = Math.exp(-((z_measure + H) * (z_measure + H)) / (2 * sz * sz));
-            const D = (1 / (2 * Math.PI * sy * sz * U)) * expY * (expZ1 + expZ2);
+            const reflectionTerm = 1.0 + Math.exp(-(4.0 * H * H) / (2.0 * sz * sz));
+            const D = (1.0 / (2.0 * Math.PI * sy * sz * U_H)) * reflectionTerm;
 
             const Q_ug_s = C_ug_m3 / D;
             const Q_kg_s = Q_ug_s * 1e-9;
 
             const qSlider = document.getElementById('Q');
             if (Q_kg_s > parseFloat(qSlider.max)) qSlider.max = (Q_kg_s * 1.5).toFixed(5);
-            if (Q_kg_s < parseFloat(qSlider.min)) qSlider.min = (Q_kg_s * 0.5).toFixed(5);
+            if (Q_kg_s < parseFloat(qSlider.min)) qSlider.min = (Q_kg_s * 0.5).toFixed(6);
 
             qSlider.value = Q_kg_s;
             document.getElementById('lQ').textContent = Q_kg_s.toFixed(6);
@@ -2162,15 +2208,22 @@
                 const newWindSpeed = typeof cur.wind_speed_10m === 'number' ? cur.wind_speed_10m : W.U;
                 const newWindDir = typeof cur.wind_direction_10m === 'number' ? cur.wind_direction_10m : W.WD;
 
-                if (newWindSpeed !== W.U || newWindDir !== W.WD) {
-                    W.U = newWindSpeed;
-                    W.WD = newWindDir;
-                }
-
+                W.U = newWindSpeed;
+                W.WD = newWindDir;
                 W.temp = typeof cur.temperature_2m === 'number' ? cur.temperature_2m : W.temp;
                 W.hum = typeof cur.relative_humidity_2m === 'number' ? cur.relative_humidity_2m : W.hum;
                 W.code = typeof cur.weather_code === 'number' ? cur.weather_code : W.code;
                 W.gust = typeof cur.wind_gusts_10m === 'number' ? cur.wind_gusts_10m : null;
+
+                // Automatically update Pasquill stability class from live meteorology unless manually overridden
+                if (!manualStabilityOverride) {
+                    const autoStab = estimatePasquillStability(W.U, W.code);
+                    const stabEl = document.getElementById('stability');
+                    if (stabEl) {
+                        stabEl.value = autoStab;
+                        document.getElementById('lsc').textContent = (stabNames[autoStab] || autoStab) + ' (Auto)';
+                    }
+                }
 
                 const aqc = aqJson.current || {};
                 AQ.pm25 = aqc.pm2_5 ?? null;
@@ -2178,6 +2231,7 @@
                 AQ.no2 = aqc.nitrogen_dioxide ?? null;
                 AQ.aqi = aqc.european_aqi ?? null;
 
+                if (lastSyncedC_ug_m3) updateDynamicQ(lastSyncedC_ug_m3);
                 updateUI();
                 recomputePlume();
 
@@ -2206,8 +2260,11 @@
 
         function updateUI() {
             const U = W.U, WD = W.WD;
+            const H = parseFloat(document.getElementById('Heff').value) || 30;
+            const stab = document.getElementById('stability').value || 'D';
+            const U_H = getWindAtHeight(U, H, stab);
             const plumeToward = (WD + 180) % 360;
-            document.getElementById('lcWind').textContent = U.toFixed(1) + ' m/s' + (W.gust ? ' (g:' + W.gust.toFixed(1) + ')' : '');
+            document.getElementById('lcWind').textContent = U.toFixed(1) + ' m/s (U_H: ' + U_H.toFixed(1) + ')';
             document.getElementById('lcDir').textContent = WD + '° FROM ' + dirN(WD);
             document.getElementById('lcPlumeDir').textContent = plumeToward + '° TO ' + dirN(plumeToward);
             document.getElementById('lcTemp').textContent = fmt(W.temp, '°C');
@@ -2220,17 +2277,17 @@
             ae.textContent = AQ.aqi ?? 'N/A'; ae.style.color = aqiC(AQ.aqi);
 
             document.getElementById('wstrip').innerHTML =
-                '<span>Wind: <span class="wv">' + U.toFixed(1) + ' m/s ' + dirN(WD) + '</span></span>' +
+                '<span>Wind: <span class="wv">' + U.toFixed(1) + ' m/s ' + dirN(WD) + ' (U_H ' + U_H.toFixed(1) + ' m/s)</span></span>' +
                 '<span>➔ <span class="wv">' + plumeToward + '° ' + dirN(plumeToward) + '</span></span>' +
                 '<span>Temp: <span class="wv">' + W.temp.toFixed(1) + '°C</span></span>' +
                 '<span>RH: <span class="wv">' + W.hum + '%</span></span>' +
                 '<span>Forecast: <span class="wv">' + (WMO[W.code] || W.code) + '</span></span>' +
                 '<span>AQI: <span class="wv" style="color:' + aqiC(AQ.aqi) + '">' + (AQ.aqi || '—') + '</span></span>';
 
-            document.getElementById('sWind').textContent = U.toFixed(2) + ' m/s';
-            document.getElementById('sWindDir').textContent = '· ' + WD + '° ' + dirN(WD);
+            document.getElementById('sWind').textContent = U_H.toFixed(2) + ' m/s';
+            document.getElementById('sWindDir').textContent = '· ' + WD + '° ' + dirN(WD) + ' → ' + dirN(plumeToward);
             drawCompass(WD);
-            document.getElementById('hudWT').textContent = U.toFixed(1) + ' m/s FROM ' + dirN(WD) + ' (' + WD + '°)';
+            document.getElementById('hudWT').textContent = U.toFixed(1) + ' m/s FROM ' + dirN(WD) + ' → ' + dirN(plumeToward);
         }
 
         function drawCompass(wd) {
@@ -2254,17 +2311,21 @@
             ctx.fillStyle = isDark ? '#9CA3AF' : '#374151'; ctx.font = '6.5px "JetBrains Mono"'; ctx.textAlign = 'center';
             ctx.fillText('N', cx, cy - r + 7); ctx.fillText('S', cx, cy + r - 1.5);
 
+            // Fix 1: True North (0 deg) is UP (-y on canvas), South (180 deg) is DOWN (+y on canvas).
+            // Wind comes FROM bearing wd: upwind point = (cx + sin(fr)*a, cy - cos(fr)*a)
+            // Wind blows TO bearing wd + 180: downwind tip = (cx - sin(fr)*a, cy + cos(fr)*a)
             const fr = wd * Math.PI / 180, a = r - 6;
+            const fromX = cx + Math.sin(fr) * a, fromY = cy - Math.cos(fr) * a;
+            const toX = cx - Math.sin(fr) * a, toY = cy + Math.cos(fr) * a;
 
             ctx.strokeStyle = '#ea580c'; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
             ctx.beginPath();
-            ctx.moveTo(cx - Math.sin(fr) * a, cy - Math.cos(fr) * a);
-            ctx.lineTo(cx + Math.sin(fr) * a, cy + Math.cos(fr) * a);
+            ctx.moveTo(fromX, fromY);
+            ctx.lineTo(toX, toY);
             ctx.stroke();
 
-            const tx = cx + Math.sin(fr) * a, ty = cy + Math.cos(fr) * a;
             ctx.fillStyle = '#ea580c';
-            ctx.beginPath(); ctx.arc(tx, ty, 3, 0, 2 * Math.PI); ctx.fill();
+            ctx.beginPath(); ctx.arc(toX, toY, 3, 0, 2 * Math.PI); ctx.fill();
             ctx.fillStyle = 'rgba(255,255,255,0.25)';
             ctx.beginPath(); ctx.arc(cx, cy, 1.8, 0, 2 * Math.PI); ctx.fill();
         }
@@ -2276,15 +2337,24 @@
             return { sy, sz };
         }
 
-        function gaussConc3D(x, y, z, Q, U, H, stab) {
+        function gaussConc3D(x, y, z, Q, U_H, H, stab) {
             if (x <= 0.5) return 0;
             const { sy, sz } = getSigmas(x, stab);
             if (sy < 1e-4 || sz < 1e-4) return 0;
-            const coeff = Q / (2 * Math.PI * sy * sz * Math.max(U, 0.2));
+            const coeff = Q / (2 * Math.PI * sy * sz * Math.max(U_H, 0.2));
             const expY = Math.exp(-(y * y) / (2 * sy * sy));
             const expZ1 = Math.exp(-((z - H) * (z - H)) / (2 * sz * sz));
             const expZ2_correct = Math.exp(-((z + H) * (z + H)) / (2 * sz * sz));
             return coeff * expY * (expZ1 + expZ2_correct) * 1e9;
+        }
+
+        function fmtScaleConc(val) {
+            if (!val || val <= 0) return '0';
+            if (val >= 100) return val.toFixed(0);
+            if (val >= 10) return val.toFixed(1);
+            if (val >= 1) return val.toFixed(2);
+            if (val >= 0.01) return val.toFixed(3);
+            return val.toExponential(1);
         }
 
         function heatColor(t) {
@@ -2314,6 +2384,8 @@
             const CW = wrap.clientWidth, CH = wrap.clientHeight;
             canvas.width = CW; canvas.height = CH;
 
+            if (lastSyncedC_ug_m3) updateDynamicQ(lastSyncedC_ug_m3);
+
             const Q = parseFloat(document.getElementById('Q').value);
             const H = parseFloat(document.getElementById('Heff').value);
             const stab = document.getElementById('stability').value;
@@ -2321,26 +2393,39 @@
             const zReceptor = parseFloat(document.getElementById('Zslice').value);
 
             const maxRangeM = parseFloat((document.getElementById('maxRange') || { value: '1000' }).value) || 1000;
-            const U = Math.max(W.U, 0.2);
+            // Fix 4: Height-adjusted wind velocity U(H) = U10 * (H / 10)^p
+            const U_H = getWindAtHeight(W.U, H, stab);
             const WD = W.WD;
 
             const plumeTowardDeg = (WD + 180) % 360;
             const pRad = plumeTowardDeg * Math.PI / 180;
 
+            // Fix 1: Screen Y-axis increases Southward (+y = South, -y = North)
             const wUx = Math.sin(pRad);
-            const wUy = Math.cos(pRad);
+            const wUy = -Math.cos(pRad);
             const wPx = -wUy;
             const wPy = wUx;
 
             const srcPt = map.latLngToContainerPoint([SRC.lat, SRC.lon]);
             const mpp = 40075016.686 * Math.cos(SRC.lat * Math.PI / 180) / Math.pow(2, map.getZoom() + 8);
 
+            // Fix 6: Exact 1D Physical Centerline Scan for Zoom-Invariant True Peak Concentration & Distance at Receptor Plane z
+            let trueMaxC = 0;
+            let truePeakX = 1;
+            const scanStep = maxRangeM > 2500 ? 2 : 1;
+            for (let xm = 1; xm <= maxRangeM; xm += scanStep) {
+                const c1d = gaussConc3D(xm, 0, zReceptor, Q, U_H, H, stab);
+                if (c1d > trueMaxC) {
+                    trueMaxC = c1d;
+                    truePeakX = xm;
+                }
+            }
+
             const SCALE = 2;
             const NW = Math.ceil(CW / SCALE);
             const NH = Math.ceil(CH / SCALE);
             const grid = new Float32Array(NW * NH);
-            let maxC = 0;
-            let peakX = 0, peakY = 0;
+            let gridMaxC = 0;
 
             for (let py = 0; py < NH; py++) {
                 for (let px = 0; px < NW; px++) {
@@ -2350,17 +2435,23 @@
                     const dyM = dy * mpp;
                     const xw = dxM * wUx + dyM * wUy;
                     const yw = dxM * wPx + dyM * wPy;
-                    const c = (xw > 0 && xw <= maxRangeM) ? gaussConc3D(xw, yw, zReceptor, Q, U, H, stab) : 0;
+                    const c = (xw > 0 && xw <= maxRangeM) ? gaussConc3D(xw, yw, zReceptor, Q, U_H, H, stab) : 0;
                     grid[py * NW + px] = c;
-                    if (c > maxC) { maxC = c; peakX = xw; peakY = yw; }
+                    if (c > gridMaxC) { gridMaxC = c; }
                 }
             }
 
+            const maxC = Math.max(trueMaxC, gridMaxC);
+            const peakX = truePeakX;
+            const peakY = 0;
+
             plumeCache = { grid, NW, NH, SCALE, maxC, srcPt, mpp, wUx, wUy, wPx, wPy };
 
+            // Fix 5: Consistent 3.5-Decade Logarithmic Color Mapping & Matching Logarithmic Legend Scale Ticks
+            const LOG_SPAN = 3.5;
             const imgData = new ImageData(NW, NH);
-            const logMax = Math.log10(Math.max(maxC, 1e-3));
-            const logMin = logMax - 5;
+            const logMax = Math.log10(Math.max(maxC, 1e-4));
+            const logMin = logMax - LOG_SPAN;
             const normField = new Float32Array(NW * NH);
 
             for (let i = 0; i < NW * NH; i++) {
@@ -2430,7 +2521,7 @@
                     ctx.arc(srcPt.x, srcPt.y, rPx, 0, 2 * Math.PI);
                     ctx.stroke();
 
-                    // Distance label along downwind ray or top of ring
+                    // Distance label along downwind ray
                     const lx = srcPt.x + wUx * rPx;
                     const ly = srcPt.y + wUy * rPx;
                     if (lx > 25 && lx < CW - 25 && ly > 20 && ly < CH - 20) {
@@ -2471,15 +2562,14 @@
                 ctx.restore();
             }
 
-            const stP = PG[stab] || PG.D;
-            const xMax = H > 0 ? Math.pow(H / (Math.sqrt(2) * stP.az), 1 / stP.bz) : 200;
-            const { sy: syMax, sz: szMax } = getSigmas(Math.max(xMax, 1), stab);
+            const { sy: syMax, sz: szMax } = getSigmas(Math.max(peakX, 1), stab);
 
             document.getElementById('sPeak').textContent = maxC.toFixed(3) + ' µg/m³';
             document.getElementById('stX').textContent = peakX > 0 ? peakX.toFixed(0) + ' m' : '—';
             document.getElementById('stY').textContent = peakY.toFixed(0) + ' m';
             document.getElementById('stZ').textContent = zReceptor + ' m';
             document.getElementById('stH').textContent = H.toFixed(1) + ' m';
+            document.getElementById('sWind').textContent = U_H.toFixed(2) + ' m/s';
 
             document.getElementById('axX').textContent = peakX > 0 ? peakX.toFixed(0) + ' m' : '—';
             document.getElementById('axY').textContent = peakY.toFixed(0) + ' m';
@@ -2487,12 +2577,14 @@
             document.getElementById('sSy').textContent = syMax.toFixed(1) + ' m';
             document.getElementById('sSz').textContent = szMax.toFixed(1) + ' m';
             document.getElementById('sH').textContent = H.toFixed(1) + ' m';
-            document.getElementById('sDist').textContent = xMax.toFixed(0) + ' m';
+            document.getElementById('sDist').textContent = peakX.toFixed(0) + ' m';
 
-            document.getElementById('scMax').textContent = maxC.toFixed(2);
-            document.getElementById('scT3').textContent = (maxC * 0.75).toFixed(2);
-            document.getElementById('scT2').textContent = (maxC * 0.5).toFixed(2);
-            document.getElementById('scT1').textContent = (maxC * 0.25).toFixed(2);
+            // Fix 5: Logarithmic Scale Bar Ticks matching C(t) = 10^(logMin + t * LOG_SPAN)
+            const cAtT = t => maxC > 1e-10 ? Math.pow(10, logMin + t * (logMax - logMin)) : 0;
+            document.getElementById('scMax').textContent = fmtScaleConc(maxC);
+            document.getElementById('scT3').textContent = fmtScaleConc(cAtT(0.75));
+            document.getElementById('scT2').textContent = fmtScaleConc(cAtT(0.50));
+            document.getElementById('scT1').textContent = fmtScaleConc(cAtT(0.25));
         }
 
         map.on('mousemove', function (e) {
@@ -2525,7 +2617,10 @@
         function bindSlider(id, lid, fmt) {
             const el = document.getElementById(id);
             const ll = document.getElementById(lid);
-            el.addEventListener('input', () => { ll.textContent = fmt ? fmt(+el.value) : el.value; });
+            el.addEventListener('input', () => {
+                ll.textContent = fmt ? fmt(+el.value) : el.value;
+                if (id === 'Heff') updateUI();
+            });
             el.addEventListener('change', recomputePlume);
         }
         bindSlider('Q', 'lQ', v => v.toFixed(5));
@@ -2536,8 +2631,22 @@
 
         const stabNames = { A: 'Unstable A', B: 'Unstable B', C: 'Unstable C', D: 'Near Neutral', E: 'Stable E', F: 'Stable F' };
         document.getElementById('stability').addEventListener('change', function () {
+            manualStabilityOverride = true;
             document.getElementById('lsc').textContent = stabNames[this.value] || this.value;
+            updateUI();
             recomputePlume();
+        });
+
+        ['mq8Ro', 'mq8RL'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('change', () => {
+                    if (lastSyncedADC) {
+                        applyMQ8Reading(lastSyncedADC);
+                        recomputePlume();
+                    }
+                });
+            }
         });
 
         document.getElementById('inAlt').addEventListener('input', function () {
@@ -2584,6 +2693,7 @@
             updateDroneHUD();
             drawCompass(315);
             fetchLiveWeather();
+            fetchSheetData();
 
             setInterval(() => {
                 document.getElementById('hudTime').textContent =
@@ -2593,6 +2703,10 @@
             setInterval(() => {
                 if (windMode === 'live') fetchLiveWeather();
             }, 5 * 60 * 1000);
+
+            setInterval(() => {
+                fetchSheetData();
+            }, 60 * 1000);
 
             setTimeout(() => { recomputePlume(); }, 1000);
         });
