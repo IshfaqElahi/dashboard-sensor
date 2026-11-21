@@ -562,19 +562,20 @@
 
         /* TELEMETRY SIDEBAR */
         #sidebar {
-            width: 320px;
+            width: 384px;
             flex-shrink: 0;
             background: var(--panel);
             border-right: 1px solid var(--border);
             display: flex;
             flex-direction: column;
             overflow-y: auto;
+            overflow-x: hidden;
             box-shadow: var(--shadow);
             z-index: 10;
         }
 
         .sb-sec {
-            padding: 20px;
+            padding: 16px 18px;
             border-bottom: 1px solid var(--border);
             animation: fadeInSection 0.4s ease backwards;
         }
@@ -1102,8 +1103,9 @@
 
         /* Sidebar 3-Tab Switcher Bar */
         .sb-tabs {
-            display: flex;
-            gap: 4px;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 6px;
             padding: 10px 14px;
             background: var(--panel);
             border-bottom: 1px solid var(--border);
@@ -1113,30 +1115,38 @@
         }
 
         .sb-tab-btn {
-            flex: 1;
+            min-width: 0;
+            width: 100%;
             font-family: var(--font-main);
             font-size: 0.72rem;
             font-weight: 700;
             padding: 8px 6px;
             border-radius: var(--radius-md);
-            border: 1px solid transparent;
+            border: 1px solid var(--border);
             background: var(--panel-card);
             color: var(--dim);
             cursor: pointer;
             text-align: center;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
             transition: all 0.2s ease;
             white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .sb-tab-btn:hover {
             color: var(--text-heading);
-            border-color: var(--border);
+            border-color: var(--accent);
         }
 
         .sb-tab-btn.active {
             background: var(--accent-glow);
             color: var(--accent);
             border-color: var(--accent);
+            box-shadow: 0 0 0 1px var(--accent-glow);
         }
 
         .sb-pane {
@@ -1151,18 +1161,19 @@
         /* Compact 2x2 Metric Grid Cards inside Sidebar */
         .metric-grid-2 {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 8px;
         }
 
         .metric-box {
+            min-width: 0;
             background: var(--panel-card);
             border: 1px solid var(--border);
             border-radius: var(--radius-md);
-            padding: 9px 11px;
+            padding: 10px 12px;
             display: flex;
             flex-direction: column;
-            gap: 3px;
+            gap: 4px;
         }
 
         .metric-box .ml {
@@ -1171,20 +1182,30 @@
             text-transform: uppercase;
             letter-spacing: 0.04em;
             font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .metric-box .mv {
-            font-size: 0.86rem;
+            font-size: 0.85rem;
             font-weight: 700;
             font-family: 'JetBrains Mono', monospace;
             color: var(--text-heading);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .coord-grid-3 {
             display: grid;
-            grid-template-columns: 1fr 1fr 0.8fr;
+            grid-template-columns: 1.15fr 1.15fr 0.78fr;
             gap: 8px;
-            margin-bottom: 8px;
+            margin-bottom: 10px;
+        }
+
+        .coord-field {
+            min-width: 0;
         }
 
         .coord-field label {
@@ -1194,6 +1215,20 @@
             font-weight: 700;
             font-family: 'JetBrains Mono', monospace;
             margin-bottom: 4px;
+            white-space: nowrap;
+        }
+
+        .coord-grid-3 .coord-input {
+            padding: 8px 10px;
+            font-size: 0.8rem;
+            -moz-appearance: textfield;
+            appearance: textfield;
+        }
+
+        .coord-grid-3 .coord-input::-webkit-outer-spin-button,
+        .coord-grid-3 .coord-input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
         }
 
         .locked-inline-bar {
@@ -1496,22 +1531,22 @@
                 <div class="sb-sec">
                     <div class="sb-t">Geospatial Target / Source Origin</div>
                     <div class="src-editor" style="margin-bottom:0">
-                        <div class="src-title" style="display:flex;justify-content:space-between;align-items:center;">
+                        <div class="src-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px;white-space:nowrap;">
                             <span>AVIONICS COORD LOCK (MQ-8)</span>
-                            <span id="droneAlt" style="color:var(--accent);font-family:'JetBrains Mono';font-size:0.68rem;">30m AGL</span>
+                            <span id="droneAlt" style="color:var(--accent);font-family:'JetBrains Mono';font-size:0.68rem;background:var(--accent-glow);padding:2px 7px;border-radius:4px;">ALT: 30m AGL</span>
                         </div>
                         <div class="coord-grid-3">
                             <div class="coord-field">
                                 <label>LAT (°N)</label>
-                                <input class="coord-input" id="inLat" type="number" step="0.0001" value="23.0942" placeholder="Lat" style="padding:7px 8px;">
+                                <input class="coord-input" id="inLat" type="number" step="0.0001" value="23.0942" placeholder="Lat">
                             </div>
                             <div class="coord-field">
                                 <label>LON (°E)</label>
-                                <input class="coord-input" id="inLon" type="number" step="0.0001" value="90.0157" placeholder="Lon" style="padding:7px 8px;">
+                                <input class="coord-input" id="inLon" type="number" step="0.0001" value="90.0157" placeholder="Lon">
                             </div>
                             <div class="coord-field">
                                 <label>ALT (m)</label>
-                                <input class="coord-input" id="inAlt" type="number" step="1" value="30" placeholder="Alt" style="padding:7px 8px;">
+                                <input class="coord-input" id="inAlt" type="number" step="1" value="30" placeholder="Alt">
                             </div>
                         </div>
                         <div style="display:flex;gap:6px;margin-top:8px">
@@ -1976,7 +2011,7 @@
         function updateDroneHUD() {
             document.getElementById('dronePos').textContent =
                 SRC.lat.toFixed(5) + '°N  ' + SRC.lon.toFixed(5) + '°E';
-            document.getElementById('droneAlt').textContent = 'ALT STACK: ' + SRC.alt + 'm AGL';
+            document.getElementById('droneAlt').textContent = 'ALT: ' + SRC.alt + 'm AGL';
             document.getElementById('srcLatDisp').textContent = SRC.lat.toFixed(6);
             document.getElementById('srcLonDisp').textContent = SRC.lon.toFixed(6);
             document.getElementById('srcAltDisp').textContent = SRC.alt + ' m';
